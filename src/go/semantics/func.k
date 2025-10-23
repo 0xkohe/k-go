@@ -10,13 +10,10 @@ module GO-FUNC
 
   syntax FunDef ::= fun(ParamIds, ParamTypes, RetType, Block)
 
-  rule <k> func F:Id PS:Parameters B:Block => .K ... </k>
-       <tenv> TEnv => TEnv [ F <- (func PS) ] </tenv>
-       <fenv> FEnv => FEnv [ F <- fun(paramIdsOf(PS), paramTypesOf(PS), void, B) ] </fenv>
-
-  rule <k> func F:Id PS:Parameters RT:Type B:Block => .K ... </k>
-       <tenv> TEnv => TEnv [ F <- (func (PS RT)) ] </tenv>
-       <fenv> FEnv => FEnv [ F <- fun(paramIdsOf(PS), paramTypesOf(PS), RT, B) ] </fenv>
+  rule <k> func F:Id Sig:FunctionSignature B:Block => .K ... </k>
+       <tenv> TEnv => TEnv [ F <- (func Sig) ] </tenv>
+       <fenv> FEnv => FEnv
+         [ F <- fun(paramIdsOf(parametersOf(Sig)), paramTypesOf(parametersOf(Sig)), retTypeOf(Sig), B) ] </fenv>
 
   syntax KItem ::= runFunc(RetType, Block)
   syntax KItem ::= returnJoin(RetType)
