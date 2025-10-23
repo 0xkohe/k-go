@@ -113,10 +113,18 @@ module GO
   rule <k> if true  B1:Block else _B2:Block => B1 ... </k>
   rule <k> if false _B1:Block else B2:Block => B2 ... </k>
 
+  // Go specification: For loop internals
   syntax KItem ::= loop(Exp, K, Block)
   syntax KItem ::= loopV(Exp, Exp, K, Block) [strict(1)]
   syntax KItem ::= "breakSignal" | "continueSignal"
 
+  // Go specification: "for" Block - infinite loop
+  rule <k> for B:Block => enterScope(loop(true, .K, B)) ... </k>
+
+  // Go specification: "for" Condition Block - condition-only loop
+  rule <k> for E:Condition B:Block => enterScope(loop(E, .K, B)) ... </k>
+
+  // Go specification: "for" ForClause Block - full for loop
   rule <k> for S1:SimpleStmt ; E:Exp ; S2:SimpleStmt B:Block => enterScope(S1 ~> loop(E, S2, B)) ... </k>
   rule <k> for S1:SimpleStmt ; ; S2:SimpleStmt B:Block       => enterScope(S1 ~> loop(true, S2, B)) ... </k>
   rule <k> for S1:SimpleStmt ; E:Exp ; B:Block               => enterScope(S1 ~> loop(E, .K, B)) ... </k>

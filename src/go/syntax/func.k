@@ -4,34 +4,49 @@ requires "core.k"
 module GO-SYNTAX-FUNC
   imports GO-SYNTAX
 
-  // Grammar follows the official Go specification (2024-06-18).
+  // Grammar follows the official Go specification.
 
+  // Go specification: FunctionType = "func" Signature .
   syntax Type ::= FunctionType
   syntax FunctionType ::= "func" FunctionSignature
 
-  // Signature = Parameters [ Result ]
+  // Go specification: Signature = Parameters [ Result ] .
   syntax FunctionSignature ::= Parameters
                              | Parameters Result
 
-  // Result = Parameters | Type
+  // Go specification: Result = Parameters | Type .
   // (This subset models only the single-Type result form.)
   syntax Result ::= Type
 
-  // Parameters = "(" [ ParameterList [ "," ] ] ")"
+  // Go specification: Parameters = "(" [ ParameterList [ "," ] ] ")" .
   syntax Parameters ::= "(" ParameterList ")"
   syntax ParameterList ::= List{ParameterDecl, ","}
+
+  // Go specification: ParameterDecl = [ IdentifierList ] [ "..." ] Type .
+  // Simplified: single identifier with type (no variadic parameters)
   syntax ParameterDecl ::= Id Type
 
+  // Function calls (not explicitly in spec grammar, but part of PrimaryExpr → Call)
   syntax Call      ::= Id "(" ArgList ")"
   syntax ArgList   ::= List{Exp, ","}
 
+  // Go specification: ReturnStmt = "return" [ ExpressionList ] .
   syntax ReturnStmt ::= "return"
                       | "return" Exp [strict]
 
+  // Go specification: FunctionDecl = "func" FunctionName [ TypeParameters ] Signature [ FunctionBody ] .
+  // Simplified: no type parameters, FunctionBody is always present
   syntax FunctionDecl ::= "func" Id FunctionSignature Block
-  syntax Statement    ::= FunctionDecl | ReturnStmt | Call
 
+  // Go specification: Statement includes various statement types
+  // Note: Call as ExpressionStmt
+  syntax Statement    ::= FunctionDecl | ReturnStmt
+  syntax SimpleStmt   ::= Call  // Call can be used as SimpleStmt (ExpressionStmt)
+
+  // Go specification: TopLevelDecl = Declaration | FunctionDecl | MethodDecl .
   syntax TopDecl ::= FunctionDecl
+
+  // Go specification: Expression includes Call as part of PrimaryExpr
   syntax Exp     ::= Call
 
   syntax ParamIds    ::= List{Id, ","}

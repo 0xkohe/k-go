@@ -14,6 +14,7 @@ kompile lesson-19-a.k  && krun code.txt
 ``` sh
 docker compose up -d && docker compose exec k bash
 docker compose exec k bash -c "cd go && kompile main.k"
+docker compose exec k bash -c "cd go && krun code --definition main-kompiled/"
 ```
 
 

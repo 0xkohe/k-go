@@ -22,14 +22,34 @@ module GO-SYNTAX
   syntax TopDecls ::= List{TopDecl, ";"}
   syntax Program ::= "package" "main" TopDecls "func" "main" "(" ")" Block TopDecls
 
+  // Go specification: Block = "{" StatementList "}" .
   syntax Block   ::= "{" StatementList ";" "}"
+
+  // Go specification: StatementList = { Statement ";" } .
   syntax StatementList ::= List{Statement, ";"}
 
   syntax Type ::= "int" | "bool"
 
+  // Go specification: ExpressionList = Expression { "," Expression } .
+  syntax ExpressionList ::= List{Exp, ","}
+
+  // Go specification: IdentifierList = identifier { "," identifier } .
+  syntax IdentifierList ::= List{Id, ","}
+
+  // Go specification: SimpleStmt = EmptyStmt | ExpressionStmt | SendStmt | IncDecStmt | Assignment | ShortVarDecl .
+  // Note: EmptyStmt and ExpressionStmt are not explicitly represented to avoid parsing ambiguities
   syntax SimpleStmt ::= Assignment | ShortVarDecl | IncDecStmt
+
+  // Go specification: Assignment = ExpressionList assign_op ExpressionList .
+  // Simplified: only single assignment with "=" operator for now
   syntax Assignment ::= Id "=" Exp [strict(2)]
+
+  // Go specification: ShortVarDecl = IdentifierList ":=" ExpressionList .
+  // Simplified: only single variable declaration for now
   syntax ShortVarDecl ::= Id ":=" Exp [strict(2)]
+
+  // Go specification: IncDecStmt = Expression ( "++" | "--" ) .
+  // Simplified: only Id for now (will expand to Expression later)
   syntax IncDecStmt ::= Id "++" | Id "--"
 
   syntax Statement ::= SimpleStmt | Print | Block | IfStmt | ForStmt | BreakStmt | ContinueStmt
@@ -55,24 +75,34 @@ module GO-SYNTAX
                  Exp "&&" Exp [left, seqstrict]
                | Exp "||" Exp [left, seqstrict]
 
+  // Go specification: IfStmt = "if" [ SimpleStmt ";" ] Expression Block [ "else" ( IfStmt | Block ) ] .
   syntax IfStmt ::= "if" Exp Block                                   [strict(1)]
                   | "if" Exp Block "else" Block                       [strict(1)]
                   | "if" Exp Block "else" IfStmt                      [strict(1)]
-                  | "if" SimpleStmt ";" Exp Block                     
-                  | "if" SimpleStmt ";" Exp Block "else" Block        
-                  | "if" SimpleStmt ";" Exp Block "else" IfStmt       
+                  | "if" SimpleStmt ";" Exp Block
+                  | "if" SimpleStmt ";" Exp Block "else" Block
+                  | "if" SimpleStmt ";" Exp Block "else" IfStmt
 
-  syntax ForStmt ::= "for" ForClause Block
+  // Go specification: ForStmt = "for" [ Condition | ForClause | RangeClause ] Block .
+  // Go specification: Condition = Expression .
+  syntax ForStmt ::= "for" Block                      // infinite loop
+                   | "for" Condition Block            // condition-only loop
+                   | "for" ForClause Block            // for clause with init;condition;post
+
+  syntax Condition ::= Exp
 
   syntax BreakStmt ::= "break"
   syntax ContinueStmt ::= "continue"
 
-  syntax ForClause ::= SimpleStmt ";" Exp ";" SimpleStmt
-                     | SimpleStmt ";" ";" SimpleStmt
-                     | SimpleStmt ";" Exp ";"
-                     | ";" Exp ";" SimpleStmt
-                     | ";" ";" SimpleStmt
-                     | ";" Exp ";"
-                     | SimpleStmt ";" ";"
-                     | ";" ";"
+  // Go specification: ForClause = [ InitStmt ] ";" [ Condition ] ";" [ PostStmt ] .
+  // Go specification: InitStmt = SimpleStmt .
+  // Go specification: PostStmt = SimpleStmt .
+  syntax ForClause ::= SimpleStmt ";" Exp ";" SimpleStmt  // init; condition; post
+                     | SimpleStmt ";" ";" SimpleStmt      // init; ; post
+                     | SimpleStmt ";" Exp ";"             // init; condition;
+                     | ";" Exp ";" SimpleStmt             // ; condition; post
+                     | ";" ";" SimpleStmt                 // ; ; post
+                     | ";" Exp ";"                        // ; condition;
+                     | SimpleStmt ";" ";"                 // init; ;
+                     | ";" ";"                            // ; ;
 endmodule
