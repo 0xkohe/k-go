@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a K Framework project implementing a subset of the Go programming language semantics. The project uses Docker for K Framework tooling and defines formal semantics for Go language features including functions, control flow, scoping, and basic types.
 
+## Reference Documentation
+
+For detailed information:
+- **K Framework**: See `K_framework_documentation.md` in the root directory for comprehensive K Framework language reference, semantics, and tooling information.
+- **Go specification**: See `src/go/go_language_specification.txt` for the official Go language specification when implementing or extending Go features.
+
 ## Development Environment
 
 The project runs inside a Docker container with K Framework pre-installed:

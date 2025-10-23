@@ -8,6 +8,10 @@
   - Example programs: `src/go/code`, `src/go/code-s`.
 - Other examples/experiments in `src/other/` (e.g., Peano, Turing machine).
 
+## Reference Documentation
+- **K Framework details**: See `K_framework_documentation.md` in the root directory for comprehensive K Framework language reference, semantics, and tooling information.
+- **Go language specification**: See `src/go/go_language_specification.txt` for the official Go language specification details when implementing or extending Go features.
+
 ## Build, Test, and Development Commands
 - Start dev container: `docker compose up -d --build`
 - Enter container: `docker compose exec k bash`
