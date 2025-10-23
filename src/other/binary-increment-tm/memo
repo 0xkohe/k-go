@@ -1,0 +1,5 @@
+   14  llvm-kompile /app/kohe/binary-increment-tm/binary-increment-tm-kompiled/definition.kore /app/kohe/binary-increment-tm/binary-increment-tm-kompiled/dt main -g -O1 -o /app/kohe/binary-increment-tm/binary-increment-tm-kompiled/interpreter -- -g
+   15  krun code --debugger
+   19  krun code --depth 2
+   20  krun code --depth 1
+   21  krun code --depth 0
