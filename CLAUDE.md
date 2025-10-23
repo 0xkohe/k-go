@@ -12,6 +12,8 @@ For detailed information:
 - **K Framework**: See `K_framework_documentation.md` in the root directory for comprehensive K Framework language reference, semantics, and tooling information.
 - **Go specification**: See `src/go/go_language_specification.txt` for the official Go language specification when implementing or extending Go features.
 
+**Important**: When implementing Go language features, always refer to the Go specification and align naming, terminology, and syntax elements as closely as possible with the official specification to maintain consistency and correctness.
+
 ## Development Environment
 
 The project runs inside a Docker container with K Framework pre-installed:

@@ -11,6 +11,7 @@
 ## Reference Documentation
 - **K Framework details**: See `K_framework_documentation.md` in the root directory for comprehensive K Framework language reference, semantics, and tooling information.
 - **Go language specification**: See `src/go/go_language_specification.txt` for the official Go language specification details when implementing or extending Go features.
+- **Naming convention**: Always refer to the Go specification and align naming, terminology, and syntax elements as closely as possible with the official Go language specification to maintain consistency and correctness.
 
 ## Build, Test, and Development Commands
 - Start dev container: `docker compose up -d --build`
