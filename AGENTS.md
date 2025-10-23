@@ -23,6 +23,16 @@
   - `krun code` or `krun code-s`
   - Debug: `krun code --debugger`
 
+### Testing After Changes
+After modifying K definitions, run the following commands from the project root:
+```bash
+# 1. Recompile the definitions
+docker compose exec k bash -c "cd go && kompile main.k"
+
+# 2. Run test program to verify changes
+docker compose exec k bash -c "cd go && krun code --definition main-kompiled/"
+```
+
 ## Coding Style & Naming Conventions
 - K files use 2-space indentation; no tabs.
 - Module names are UPPER_SNAKE with hyphen segments (e.g., `GO-SYNTAX`).

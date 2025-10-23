@@ -56,6 +56,23 @@ krun code.txt --debugger
 krun -cPGM=0 --debugger
 ```
 
+### Testing After Changes
+
+After modifying K definitions, run the following commands from the project root to verify changes:
+
+```bash
+# 1. Recompile the definitions
+docker compose exec k bash -c "cd go && kompile main.k"
+
+# 2. Run test program to verify changes
+docker compose exec k bash -c "cd go && krun code --definition main-kompiled/"
+```
+
+These commands ensure that:
+- The K definitions compile without errors
+- Existing test programs still execute correctly
+- No regressions are introduced by the changes
+
 ## Architecture
 
 ### Primary Go Implementation (`src/go/`)
