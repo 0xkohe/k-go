@@ -15,16 +15,17 @@ module GO-SYNTAX-FUNC
                              | Parameters Result
 
   // Go specification: Result = Parameters | Type .
-  // (This subset models only the single-Type result form.)
-  syntax Result ::= Type
+  // Now supports both single Type and Parameters (for multiple return values)
+  syntax Result ::= Type | Parameters
 
   // Go specification: Parameters = "(" [ ParameterList [ "," ] ] ")" .
   syntax Parameters ::= "(" ParameterList ")"
   syntax ParameterList ::= List{ParameterDecl, ","}
 
   // Go specification: ParameterDecl = [ IdentifierList ] [ "..." ] Type .
-  // Simplified: single identifier with type (no variadic parameters)
-  syntax ParameterDecl ::= Id Type
+  // Supports both named and unnamed parameters
+  syntax ParameterDecl ::= Id Type      // named parameter
+                         | Type         // unnamed parameter (for return types)
 
   // Function calls (not explicitly in spec grammar, but part of PrimaryExpr → Call)
   syntax Call      ::= Id "(" ArgList ")"
@@ -32,7 +33,7 @@ module GO-SYNTAX-FUNC
 
   // Go specification: ReturnStmt = "return" [ ExpressionList ] .
   syntax ReturnStmt ::= "return"
-                      | "return" Exp [strict]
+                      | "return" ExpressionList [strict]
 
   // Go specification: FunctionDecl = "func" FunctionName [ TypeParameters ] Signature [ FunctionBody ] .
   // Simplified: no type parameters, FunctionBody is always present
@@ -57,10 +58,14 @@ module GO-SYNTAX-FUNC
   rule idsOf(.ParameterList) => .ParamIds
   rule idsOf((X:Id _T:Type , PL:ParameterList)) => X , idsOf(PL)
   rule idsOf((X:Id _T:Type))                    => X
+  rule idsOf((_T:Type , PL:ParameterList))      => idsOf(PL)  // unnamed param
+  rule idsOf(_T:Type)                           => .ParamIds  // unnamed param
 
   rule typesOf(.ParameterList) => .ParamTypes
   rule typesOf((_X:Id T:Type , PL:ParameterList)) => T , typesOf(PL)
   rule typesOf((_X:Id T:Type))                    => T
+  rule typesOf((T:Type , PL:ParameterList))       => T , typesOf(PL)  // unnamed param
+  rule typesOf(T:Type)                            => T  // unnamed param
 
   syntax ParamIds   ::= paramIdsOf(Parameters)   [function]
   syntax ParamTypes ::= paramTypesOf(Parameters) [function]
@@ -71,8 +76,9 @@ module GO-SYNTAX-FUNC
   rule parametersOf(PS:Parameters) => PS
   rule parametersOf(PS:Parameters _RT:Result) => PS
 
-  syntax RetType ::= Type | "void"
+  syntax RetType ::= Type | "void" | Parameters
   syntax RetType ::= retTypeOf(FunctionSignature) [function]
   rule retTypeOf(_PS:Parameters)           => void
-  rule retTypeOf(_PS:Parameters RT:Result) => RT
+  rule retTypeOf(_PS:Parameters RT:Type) => RT
+  rule retTypeOf(_PS:Parameters RT:Parameters) => RT  // multiple return types
 endmodule

@@ -31,17 +31,41 @@ module GO-FUNC
 
   syntax KItem ::= returnSignal(K)
 
-  rule <k> return       => returnSignal(.K) ... </k>
-  rule <k> return V:Exp => returnSignal(V) ... </k> 
-  
+  // Void return
+  rule <k> return => returnSignal(.K) ... </k>
+
+  // Single return value
+  rule <k> return V:Int , .ExpressionList => returnSignal(V) ... </k>
+  rule <k> return V:Bool , .ExpressionList => returnSignal(V) ... </k>
+
+  // Multiple return values (ExpressionList with 2+ elements)
+  rule <k> return (E1:Exp , E2:Exp) => returnSignal(tuple(ListItem(E1) ListItem(E2))) ... </k>
+  rule <k> return (E1:Exp , E2:Exp , EL:ExpressionList) => returnSignal(tuple(ListItem(E1) ListItem(E2) expListToList(EL))) ... </k>
+
   rule <k> returnSignal(V) ~> exitScope => exitScope ~> returnSignal(V) ... </k>
 
   rule <k> returnSignal(V) ~> _KI:KItem => returnSignal(V) ... </k> [owise]
 
+  // Void return
   rule <k> returnSignal(_V) ~> returnJoin(void) => .K ... </k>
+
+  // Single value return
   rule <k> returnSignal(V:Int)  ~> returnJoin(int)  => V ... </k>
   rule <k> returnSignal(V:Bool) ~> returnJoin(bool) => V ... </k>
 
+  // Multiple value return
+  rule <k> returnSignal(tuple(L:List)) ~> returnJoin(PS:Parameters) => tuple(L) ... </k>
+    requires matchTypes(L, paramTypesOf(PS))
+
   rule <k> returnJoin(void) => .K ... </k>
   // Non-void functions without explicit return remain stuck.
+
+  // Helper to check if types match
+  syntax Bool ::= matchTypes(List, ParamTypes) [function]
+  rule matchTypes(.List, .ParamTypes) => true
+  rule matchTypes((ListItem(_:Int) L), (int , PTS)) => matchTypes(L, PTS)
+  rule matchTypes((ListItem(_:Bool) L), (bool , PTS)) => matchTypes(L, PTS)
+  rule matchTypes(ListItem(_:Int), int) => true
+  rule matchTypes(ListItem(_:Bool), bool) => true
+  rule matchTypes(_, _) => false [owise]
 endmodule
