@@ -10,4 +10,11 @@ krun code.txt --debugger
 
 kompile lesson-19-a.k  && krun code.txt 
 
+
+``` sh
+docker compose up -d && docker compose exec k bash
+docker compose exec k bash -c "cd src/go && kompile main.k"
+```
+
+
 # k-go
