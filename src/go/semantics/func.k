@@ -19,8 +19,36 @@ module GO-FUNC
   syntax KItem ::= returnJoin(RetType)
   syntax KItem ::= bindParams(ParamIds, ParamTypes, ArgList)
 
+  // Go specification: Named function call (looks up function definition)
   rule <k> F:Id (AL:ArgList) => enterScope(bindParams(PIs, PTs, AL) ~> B) ~> returnJoin(RT) ... </k>
      <fenv> ... F |-> fun(PIs, PTs, RT, B) ... </fenv>
+
+  // If F is not in fenv, evaluate it as a variable and retry the call
+  syntax KItem ::= retryCall(K, ArgList)
+  rule <k> F:Id (AL:ArgList) => retryCall(F, AL) ... </k>
+       <fenv> FEnv </fenv>
+    requires notBool (F in_keys(FEnv))
+
+  context retryCall(HOLE:KItem, _)
+
+  rule <k> retryCall(FV:FuncVal, AL) => FV (AL) ... </k>
+
+  // Go specification: Named function reference as function value
+  // When a function name is referenced (not called), return its function value
+  rule <k> F:Id => funcVal(PIs, PTs, RT, Body, .Map, .Map) ... </k>
+       <tenv> ... F |-> (_:FunctionType) ... </tenv>
+       <fenv> ... F |-> fun(PIs, PTs, RT, Body) ... </fenv>
+
+  // Go specification: Function value call (with closure environment)
+  syntax KItem ::= restoreClosureEnv(Map, Map)
+
+  rule <k> funcVal(PIs, PTs, RT, B, ClosEnvI, ClosEnvB) (AL:ArgList)
+        => enterScope(restoreClosureEnv(ClosEnvI, ClosEnvB) ~> bindParams(PIs, PTs, AL) ~> B) ~> returnJoin(RT) ... </k>
+
+  // Restore closure environment by merging with current environment
+  rule <k> restoreClosureEnv(ClosEnvI, ClosEnvB) => .K ... </k>
+       <envI> CurEnvI => CurEnvI ClosEnvI </envI>
+       <envB> CurEnvB => CurEnvB ClosEnvB </envB>
 
   rule <k> bindParams(.ParamIds, .ParamTypes, .ArgList) => .K ... </k>
 

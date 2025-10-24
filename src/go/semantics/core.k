@@ -1,8 +1,10 @@
 requires "domains.md"
 requires "../syntax/core.k"
+requires "../syntax/func.k"
 
 module GO
   imports GO-SYNTAX
+  imports GO-SYNTAX-FUNC
   imports INT
   imports LIST
   imports BOOL
@@ -16,10 +18,12 @@ module GO
       <tenv> .Map </tenv>
       <envI> .Map </envI>
       <envB> .Map </envB>
+      <envF> .Map </envF>  // Function values environment
       <tenvStack> .List </tenvStack>
       <envIStack> .List </envIStack>
       <envBStack> .List </envBStack>
-      <fenv> .Map </fenv>
+      <envFStack> .List </envFStack>  // Function values environment stack
+      <fenv> .Map </fenv>  // Function definitions (name -> definition)
     </T>
 
   syntax K ::= toSeqTop(TopDecls) [function]
@@ -39,17 +43,21 @@ module GO
        <tenv> T </tenv>
        <envI> I </envI>
        <envB> B </envB>
+       <envF> F </envF>
        <tenvStack> TS => TS ListItem(T) </tenvStack>
        <envIStack> IS => IS ListItem(I) </envIStack>
        <envBStack> BS => BS ListItem(B) </envBStack>
+       <envFStack> FS => FS ListItem(F) </envFStack>
 
   rule <k> exitScope => .K ... </k>
        <tenvStack> (TS ListItem(T)) => TS </tenvStack>
        <envIStack> (IS ListItem(I)) => IS </envIStack>
        <envBStack> (BS ListItem(BV)) => BS </envBStack>
+       <envFStack> (FS ListItem(FV)) => FS </envFStack>
        <tenv> _ => T </tenv>
        <envI> _ => I </envI>
        <envB> _ => BV </envB>
+       <envF> _ => FV </envF>
 
   rule <k> print(I:Int) => .K ... </k>
        <out> OL => OL ListItem(I) </out>
@@ -61,6 +69,12 @@ module GO
   rule <k> var X:Id bool = B:Bool => .K ... </k>
        <tenv> R => R [ X <- bool ] </tenv>
        <envB> Rho => Rho [ X <- B ] </envB>
+
+  // Go specification: Function type variable declaration
+  // The zero value of function type is nil
+  rule <k> var X:Id FT:FunctionType = FV:FuncVal => .K ... </k>
+       <tenv> R => R [ X <- FT ] </tenv>
+       <envF> Rho => Rho [ X <- FV ] </envF>
 
   rule <k> X:Id := I:Int => .K ... </k>
        <tenv> R => R [ X <- int ] </tenv>
@@ -77,6 +91,10 @@ module GO
   rule <k> X:Id = B:Bool => .K ... </k>
        <tenv> ... X |-> bool ... </tenv>
        <envB> Rho => Rho [ X <- B ] </envB>
+
+  rule <k> X:Id = FV:FuncVal => .K ... </k>
+       <tenv> ... X |-> _FT:FunctionType ... </tenv>
+       <envF> Rho => Rho [ X <- FV ] </envF>
 
   // Multiple assignment from tuple (from function call)
   // a, b = f() where f() returns tuple(...)
@@ -143,6 +161,8 @@ module GO
        <envI> ... X |-> I:Int ... </envI>
   rule <k> X:Id => B ... </k>
        <envB> ... X |-> B:Bool ... </envB>
+  rule <k> X:Id => FV ... </k>
+       <envF> ... X |-> FV:FuncVal ... </envF>
 
   rule <k> I1:Int + I2:Int => I1 +Int I2 ... </k>
   rule <k> I1:Int - I2:Int => I1 -Int I2 ... </k>
@@ -215,12 +235,9 @@ module GO
   rule isKResult(_:Int)  => true
   rule isKResult(_:Bool) => true
   rule isKResult(tuple(_)) => true
+  rule isKResult(_:FuncVal) => true
   rule isKResult(_)      => false [owise]
 
-  // Context rule: evaluate elements in ExpressionList (for 2+ elements)
-  // This heats the first non-value element
-  context (HOLE:Exp , _:Exp , _:ExpressionList)
-  context (HOLE:Exp , _:Exp)
 
   // Helper to convert ExpressionList to List for values
   syntax List ::= expListToList(ExpressionList) [function]
