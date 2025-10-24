@@ -16,15 +16,16 @@ module GO
       <k> $PGM:Program </k>
       <out> .List </out>
       <tenv> .Map </tenv>
-      <envI> .Map </envI>
-      <envB> .Map </envB>
-      <envF> .Map </envF>  // Function values environment
+      <env> .Map </env>  // Id -> Location (unified environment for all types)
+      <store> .Map </store>  // Location -> Value (all values stored here)
+      <nextLoc> 0 </nextLoc>  // Next available location
+      <envStack> .List </envStack>  // Stack for block scoping
       <tenvStack> .List </tenvStack>
-      <envIStack> .List </envIStack>
-      <envBStack> .List </envBStack>
-      <envFStack> .List </envFStack>  // Function values environment stack
       <fenv> .Map </fenv>  // Function definitions (name -> definition)
     </T>
+
+  // Location type for store-based semantics
+  syntax Loc ::= Int
 
   syntax K ::= toSeqTop(TopDecls) [function]
   rule toSeqTop(.TopDecls) => .K
@@ -41,48 +42,52 @@ module GO
 
   rule <k> enterScope(Body:K) => Body ~> exitScope ... </k>
        <tenv> T </tenv>
-       <envI> I </envI>
-       <envB> B </envB>
-       <envF> F </envF>
+       <env> E </env>
        <tenvStack> TS => TS ListItem(T) </tenvStack>
-       <envIStack> IS => IS ListItem(I) </envIStack>
-       <envBStack> BS => BS ListItem(B) </envBStack>
-       <envFStack> FS => FS ListItem(F) </envFStack>
+       <envStack> ES => ES ListItem(E) </envStack>
 
   rule <k> exitScope => .K ... </k>
        <tenvStack> (TS ListItem(T)) => TS </tenvStack>
-       <envIStack> (IS ListItem(I)) => IS </envIStack>
-       <envBStack> (BS ListItem(BV)) => BS </envBStack>
-       <envFStack> (FS ListItem(FV)) => FS </envFStack>
+       <envStack> (ES ListItem(E)) => ES </envStack>
        <tenv> _ => T </tenv>
-       <envI> _ => I </envI>
-       <envB> _ => BV </envB>
-       <envF> _ => FV </envF>
+       <env> _ => E </env>
 
   rule <k> print(I:Int) => .K ... </k>
        <out> OL => OL ListItem(I) </out>
 
+  // Variable declarations with store-based semantics
   rule <k> var X:Id int = I:Int => .K ... </k>
        <tenv> R => R [ X <- int ] </tenv>
-       <envI> Rho => Rho [ X <- I ] </envI>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- I ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
 
   rule <k> var X:Id bool = B:Bool => .K ... </k>
        <tenv> R => R [ X <- bool ] </tenv>
-       <envB> Rho => Rho [ X <- B ] </envB>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- B ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
 
   // Go specification: Function type variable declaration
   // The zero value of function type is nil
   rule <k> var X:Id FT:FunctionType = FV:FuncVal => .K ... </k>
        <tenv> R => R [ X <- FT ] </tenv>
-       <envF> Rho => Rho [ X <- FV ] </envF>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- FV ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
 
+  // Short variable declarations with store-based semantics
   rule <k> X:Id := I:Int => .K ... </k>
        <tenv> R => R [ X <- int ] </tenv>
-       <envI> Rho => Rho [ X <- I ] </envI>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- I ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
 
   rule <k> X:Id := B:Bool => .K ... </k>
        <tenv> R => R [ X <- bool ] </tenv>
-       <envB> Rho => Rho [ X <- B ] </envB>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- B ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
 
   // Go specification: Short variable declaration with function value
   // Infer function type from funcVal
@@ -104,21 +109,28 @@ module GO
   rule resultFromRetType(T:Type) => T
   rule resultFromRetType(PS:Parameters) => PS
 
-  rule <k> X:Id := funcVal(_, PTs, RT, _, _, _, _) #as FV:FuncVal => .K ... </k>
+  // Match FuncVal with explicit parameter structure
+  rule <k> X:Id := funcVal(PIs:ParamIds, PTs:ParamTypes, RT:RetType, Body:Block, TEnv:Map, Env:Map, _:Map) => .K ... </k>
        <tenv> R => R [ X <- inferFuncType(PTs, RT) ] </tenv>
-       <envF> Rho => Rho [ X <- FV ] </envF>
+       <env> CurEnv => CurEnv [ X <- L ] </env>
+       <store> Store => Store [ L <- funcVal(PIs, PTs, RT, Body, TEnv, Env, .Map) ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
 
+  // Assignment with store-based semantics (update value at location)
   rule <k> X:Id = I:Int => .K ... </k>
        <tenv> ... X |-> int ... </tenv>
-       <envI> Rho => Rho [ X <- I ] </envI>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- I ] </store>
 
   rule <k> X:Id = B:Bool => .K ... </k>
        <tenv> ... X |-> bool ... </tenv>
-       <envB> Rho => Rho [ X <- B ] </envB>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- B ] </store>
 
   rule <k> X:Id = FV:FuncVal => .K ... </k>
        <tenv> ... X |-> _FT:FunctionType ... </tenv>
-       <envF> Rho => Rho [ X <- FV ] </envF>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- FV ] </store>
 
   // Simplification: single-element IdentifierList to Id
   // K's List macro can represent single Id as IdentifierList, need to simplify
@@ -147,19 +159,23 @@ module GO
 
   rule <k> assignFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Int) LRest:List)) => assignFromTuple(ILRest, LRest) ... </k>
        <tenv> ... X |-> int ... </tenv>
-       <envI> Rho => Rho [ X <- V ] </envI>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- V ] </store>
 
   rule <k> assignFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Bool) LRest:List)) => assignFromTuple(ILRest, LRest) ... </k>
        <tenv> ... X |-> bool ... </tenv>
-       <envB> Rho => Rho [ X <- V ] </envB>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- V ] </store>
 
   rule <k> assignFromTuple(X:Id, ListItem(V:Int)) => .K ... </k>
        <tenv> ... X |-> int ... </tenv>
-       <envI> Rho => Rho [ X <- V ] </envI>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- V ] </store>
 
   rule <k> assignFromTuple(X:Id, ListItem(V:Bool)) => .K ... </k>
        <tenv> ... X |-> bool ... </tenv>
-       <envB> Rho => Rho [ X <- V ] </envB>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- V ] </store>
 
   rule <k> assignFromTuple(.IdentifierList, .List) => .K ... </k>
 
@@ -177,28 +193,34 @@ module GO
 
   rule <k> declareFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Int) LRest:List)) => declareFromTuple(ILRest, LRest) ... </k>
        <tenv> TEnv => TEnv [ X <- int ] </tenv>
-       <envI> Rho => Rho [ X <- V ] </envI>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- V ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
 
   rule <k> declareFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Bool) LRest:List)) => declareFromTuple(ILRest, LRest) ... </k>
        <tenv> TEnv => TEnv [ X <- bool ] </tenv>
-       <envB> Rho => Rho [ X <- V ] </envB>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- V ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
 
   rule <k> declareFromTuple(X:Id, ListItem(V:Int)) => .K ... </k>
        <tenv> TEnv => TEnv [ X <- int ] </tenv>
-       <envI> Rho => Rho [ X <- V ] </envI>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- V ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
 
   rule <k> declareFromTuple(X:Id, ListItem(V:Bool)) => .K ... </k>
        <tenv> TEnv => TEnv [ X <- bool ] </tenv>
-       <envB> Rho => Rho [ X <- V ] </envB>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- V ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
 
   rule <k> declareFromTuple(.IdentifierList, .List) => .K ... </k>
 
-  rule <k> X:Id => I ... </k>
-       <envI> ... X |-> I:Int ... </envI>
-  rule <k> X:Id => B ... </k>
-       <envB> ... X |-> B:Bool ... </envB>
-  rule <k> X:Id => FV ... </k>
-       <envF> ... X |-> FV:FuncVal ... </envF>
+  // Variable lookup with store-based semantics
+  rule <k> X:Id => V ... </k>
+       <env> ... X |-> L:Int ... </env>
+       <store> ... L |-> V ... </store>
 
   rule <k> I1:Int + I2:Int => I1 +Int I2 ... </k>
   rule <k> I1:Int - I2:Int => I1 -Int I2 ... </k>
