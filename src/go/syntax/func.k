@@ -14,8 +14,8 @@ module GO-SYNTAX-FUNC
   // Go specification: Function values
   // A function value represents a function (named or anonymous) with a closure environment
   // FuncVal stores: parameter IDs, parameter types, return type, body, and captured environment
-  syntax FuncVal ::= funcVal(ParamIds, ParamTypes, RetType, Block, Map, Map)
-                     // funcVal(paramIds, paramTypes, retType, body, closureEnvI, closureEnvB)
+  syntax FuncVal ::= funcVal(ParamIds, ParamTypes, RetType, Block, Map, Map, Map)
+                     // funcVal(paramIds, paramTypes, retType, body, closureTEnv, closureEnvI, closureEnvB)
   syntax Exp ::= FuncVal
 
   // Go specification: The zero value of function type is nil
@@ -55,6 +55,11 @@ module GO-SYNTAX-FUNC
   // Go specification: FunctionDecl = "func" FunctionName [ TypeParameters ] Signature [ FunctionBody ] .
   // Simplified: no type parameters, FunctionBody is always present
   syntax FunctionDecl ::= "func" Id FunctionSignature Block
+
+  // Go specification: FunctionLit = "func" Signature FunctionBody .
+  // A function literal represents an anonymous function
+  syntax FunctionLit ::= "func" FunctionSignature Block
+  syntax Exp ::= FunctionLit
 
   // Go specification: Statement includes various statement types
   // Note: Call as ExpressionStmt

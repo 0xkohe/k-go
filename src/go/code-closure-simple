@@ -1,0 +1,9 @@
+package main
+
+func main() {
+    x := 10;
+    f := func(y int) int {
+        return x + y;
+    };
+    print(f(5));
+}

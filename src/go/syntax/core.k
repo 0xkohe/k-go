@@ -53,14 +53,14 @@ module GO-SYNTAX
   // Single assignment (most common case)
   syntax Assignment ::= Id "=" Exp [strict(2), prefer]
   // Multiple assignment (must have at least 2 identifiers)
-  // Note: no strict annotation - evaluation handled manually in semantics
+  // Note: no strict - handled manually to support single-element lists
   syntax Assignment ::= IdentifierList "=" ExpressionList [avoid]
 
   // Go specification: ShortVarDecl = IdentifierList ":=" ExpressionList .
   // Single declaration (most common case)
   syntax ShortVarDecl ::= Id ":=" Exp [strict(2), prefer]
   // Multiple declaration (must have at least 2 identifiers)
-  // Note: no strict annotation - evaluation handled manually in semantics
+  // Note: no strict - handled manually to support single-element lists
   syntax ShortVarDecl ::= IdentifierList ":=" ExpressionList [avoid]
 
   // Go specification: IncDecStmt = Expression ( "++" | "--" ) .
