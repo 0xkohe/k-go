@@ -1,0 +1,12 @@
+package main
+
+func triple() (int, int, int) {
+    return 10, 20, 30;
+}
+
+func main() {
+    a, b, c := triple();
+    print(a);
+    print(b);
+    print(c);
+}

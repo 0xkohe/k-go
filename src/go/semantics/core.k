@@ -81,9 +81,15 @@ module GO
   // Multiple assignment from tuple (from function call)
   // a, b = f() where f() returns tuple(...)
   syntax KItem ::= assignFromTuple(IdentifierList, List)
+  syntax KItem ::= evalForAssign(IdentifierList, K)
 
-  rule <k> (X:Id , Y:Id) = tuple(L:List) => assignFromTuple((X , Y), L) ... </k>
-  rule <k> (X:Id , Y:Id , IL:IdentifierList) = tuple(L:List) => assignFromTuple((X , Y , IL), L) ... </k>
+  // Special case: multi-variable assignment from function call returning tuple
+  rule <k> IL:IdentifierList = (E:Exp , .ExpressionList) => evalForAssign(IL, E) ... </k>
+    requires lenIdList(IL) >=Int 2
+
+  context evalForAssign(_, HOLE:KItem)
+
+  rule <k> evalForAssign(IL, tuple(L:List)) => assignFromTuple(IL, L) ... </k>
 
   rule <k> assignFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Int) LRest:List)) => assignFromTuple(ILRest, LRest) ... </k>
        <tenv> ... X |-> int ... </tenv>
@@ -105,9 +111,15 @@ module GO
 
   // Multiple short variable declaration from tuple
   syntax KItem ::= declareFromTuple(IdentifierList, List)
+  syntax KItem ::= evalForDeclare(IdentifierList, K)
 
-  rule <k> (X:Id , Y:Id) := tuple(L:List) => declareFromTuple((X , Y), L) ... </k>
-  rule <k> (X:Id , Y:Id , IL:IdentifierList) := tuple(L:List) => declareFromTuple((X , Y , IL), L) ... </k>
+  // Special case: multi-variable short declaration from function call returning tuple
+  rule <k> IL:IdentifierList := (E:Exp , .ExpressionList) => evalForDeclare(IL, E) ... </k>
+    requires lenIdList(IL) >=Int 2
+
+  context evalForDeclare(_, HOLE:KItem)
+
+  rule <k> evalForDeclare(IL, tuple(L:List)) => declareFromTuple(IL, L) ... </k>
 
   rule <k> declareFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Int) LRest:List)) => declareFromTuple(ILRest, LRest) ... </k>
        <tenv> TEnv => TEnv [ X <- int ] </tenv>
@@ -205,11 +217,19 @@ module GO
   rule isKResult(tuple(_)) => true
   rule isKResult(_)      => false [owise]
 
+  // Context rule: evaluate elements in ExpressionList (for 2+ elements)
+  // This heats the first non-value element
+  context (HOLE:Exp , _:Exp , _:ExpressionList)
+  context (HOLE:Exp , _:Exp)
+
   // Helper to convert ExpressionList to List for values
   syntax List ::= expListToList(ExpressionList) [function]
   rule expListToList(.ExpressionList) => .List
   rule expListToList(E:Exp , EL:ExpressionList) => ListItem(E) expListToList(EL)
   rule expListToList(E:Exp) => ListItem(E)
+
+  // Helper to create tuple from ExpressionList
+  rule makeTuple(EL:ExpressionList) => tuple(expListToList(EL))
 
   // Helper to get length of ExpressionList
   syntax Int ::= lenExpList(ExpressionList) [function]

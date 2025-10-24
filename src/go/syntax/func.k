@@ -32,8 +32,12 @@ module GO-SYNTAX-FUNC
   syntax ArgList   ::= List{Exp, ","}
 
   // Go specification: ReturnStmt = "return" [ ExpressionList ] .
-  syntax ReturnStmt ::= "return"
-                      | "return" ExpressionList [strict]
+  syntax ReturnStmt ::= "return"             // void return
+                      | "return" Exp [strict, prefer] // single value return (prefer for single element)
+                      | "return" ExpressionList [avoid] // multiple value return
+
+  // Internal: For rewriting multi-value returns
+  syntax ReturnStmt ::= returnTuple(Tuple)
 
   // Go specification: FunctionDecl = "func" FunctionName [ TypeParameters ] Signature [ FunctionBody ] .
   // Simplified: no type parameters, FunctionBody is always present

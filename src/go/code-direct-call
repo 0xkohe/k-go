@@ -1,0 +1,9 @@
+package main
+
+func getOne() int {
+    return 1;
+}
+
+func main() {
+    print(getOne());
+}

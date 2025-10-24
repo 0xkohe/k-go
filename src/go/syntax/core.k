@@ -42,6 +42,9 @@ module GO-SYNTAX
   syntax Tuple ::= "tuple" "(" List ")"
   syntax Exp ::= Tuple
 
+  // Helper: Create tuple from ExpressionList (used internally)
+  syntax Tuple ::= makeTuple(ExpressionList) [function]
+
   // Go specification: SimpleStmt = EmptyStmt | ExpressionStmt | SendStmt | IncDecStmt | Assignment | ShortVarDecl .
   // Note: EmptyStmt and ExpressionStmt are not explicitly represented to avoid parsing ambiguities
   syntax SimpleStmt ::= Assignment | ShortVarDecl | IncDecStmt
@@ -50,13 +53,15 @@ module GO-SYNTAX
   // Single assignment (most common case)
   syntax Assignment ::= Id "=" Exp [strict(2), prefer]
   // Multiple assignment (must have at least 2 identifiers)
-  syntax Assignment ::= IdentifierList "=" ExpressionList [strict(2), avoid]
+  // Note: no strict annotation - evaluation handled manually in semantics
+  syntax Assignment ::= IdentifierList "=" ExpressionList [avoid]
 
   // Go specification: ShortVarDecl = IdentifierList ":=" ExpressionList .
   // Single declaration (most common case)
   syntax ShortVarDecl ::= Id ":=" Exp [strict(2), prefer]
   // Multiple declaration (must have at least 2 identifiers)
-  syntax ShortVarDecl ::= IdentifierList ":=" ExpressionList [strict(2), avoid]
+  // Note: no strict annotation - evaluation handled manually in semantics
+  syntax ShortVarDecl ::= IdentifierList ":=" ExpressionList [avoid]
 
   // Go specification: IncDecStmt = Expression ( "++" | "--" ) .
   // Simplified: only Id for now (will expand to Expression later)
