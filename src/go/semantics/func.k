@@ -64,34 +64,35 @@ module GO-FUNC
 
   // Go specification: Function literal evaluation
   // Creates a function value with closure environment captured
+  // NOW CAPTURES ONLY ENV (Id -> Loc), sharing the same store!
   rule <k> func Sig:FunctionSignature B:Block
         => funcVal(paramIdsOf(parametersOf(Sig)),
                    paramTypesOf(parametersOf(Sig)),
                    retTypeOf(Sig),
                    B,
                    TEnv,  // Capture current type environment
-                   EnvI,  // Capture current integer environment
-                   EnvB)  // Capture current boolean environment
+                   Env,   // Capture current environment (Id -> Loc)
+                   .Map)  // No longer needed (kept for compatibility)
            ... </k>
        <tenv> TEnv </tenv>
-       <envI> EnvI </envI>
-       <envB> EnvB </envB>
+       <env> Env </env>
 
   // Go specification: Function value call (with closure environment)
   syntax KItem ::= restoreClosureEnv(Map, Map, Map)
 
-  rule <k> funcVal(PIs, PTs, RT, B, ClosTEnv, ClosEnvI, ClosEnvB) (AL:ArgList)
-        => enterScope(restoreClosureEnv(ClosTEnv, ClosEnvI, ClosEnvB) ~> bindParams(PIs, PTs, AL) ~> B) ~> returnJoin(RT) ... </k>
+  rule <k> funcVal(PIs, PTs, RT, B, ClosTEnv, ClosEnv, _) (AL:ArgList)
+        => enterScope(restoreClosureEnv(ClosTEnv, ClosEnv, .Map) ~> bindParams(PIs, PTs, AL) ~> B) ~> returnJoin(RT) ... </k>
 
   // Restore closure environment (replace current environment)
-  // Functions should only see captured environment + their parameters
-  rule <k> restoreClosureEnv(ClosTEnv, ClosEnvI, ClosEnvB) => .K ... </k>
+  // The key change: we restore env (Id -> Loc) which SHARES the store!
+  // This enables reference-based closure semantics
+  rule <k> restoreClosureEnv(ClosTEnv, ClosEnv, _) => .K ... </k>
        <tenv> _ => ClosTEnv </tenv>
-       <envI> _ => ClosEnvI </envI>
-       <envB> _ => ClosEnvB </envB>
+       <env> _ => ClosEnv </env>
 
   rule <k> bindParams(.ParamIds, .ParamTypes, .ArgList) => .K ... </k>
 
+  // bindParams now uses var declarations which handle location allocation
   rule <k> bindParams((X:Id , Xs:ParamIds), (int  , Ts:ParamTypes), (V:Int  , Vs:ArgList))
         => var X int  = V ~> bindParams(Xs, Ts, Vs) ... </k>
   rule <k> bindParams((X:Id , Xs:ParamIds), (bool , Ts:ParamTypes), (V:Bool , Vs:ArgList))
