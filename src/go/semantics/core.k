@@ -84,6 +84,30 @@ module GO
        <tenv> R => R [ X <- bool ] </tenv>
        <envB> Rho => Rho [ X <- B ] </envB>
 
+  // Go specification: Short variable declaration with function value
+  // Infer function type from funcVal
+  syntax FunctionType ::= inferFuncType(ParamTypes, RetType) [function]
+  rule inferFuncType(PTs, RT) => func parametersFromTypes(PTs) resultFromRetType(RT)
+
+  syntax Parameters ::= parametersFromTypes(ParamTypes) [function]
+  rule parametersFromTypes(.ParamTypes) => ( .ParameterList )
+  rule parametersFromTypes(T:Type , Rest:ParamTypes) => ( T , paramListFromTypes(Rest) )
+  rule parametersFromTypes(T:Type) => ( T )
+
+  syntax ParameterList ::= paramListFromTypes(ParamTypes) [function]
+  rule paramListFromTypes(.ParamTypes) => .ParameterList
+  rule paramListFromTypes(T:Type , Rest:ParamTypes) => T , paramListFromTypes(Rest)
+  rule paramListFromTypes(T:Type) => T
+
+  syntax Result ::= resultFromRetType(RetType) [function]
+  rule resultFromRetType(void) => ( .ParameterList )
+  rule resultFromRetType(T:Type) => T
+  rule resultFromRetType(PS:Parameters) => PS
+
+  rule <k> X:Id := funcVal(_, PTs, RT, _, _, _, _) #as FV:FuncVal => .K ... </k>
+       <tenv> R => R [ X <- inferFuncType(PTs, RT) ] </tenv>
+       <envF> Rho => Rho [ X <- FV ] </envF>
+
   rule <k> X:Id = I:Int => .K ... </k>
        <tenv> ... X |-> int ... </tenv>
        <envI> Rho => Rho [ X <- I ] </envI>
@@ -96,12 +120,24 @@ module GO
        <tenv> ... X |-> _FT:FunctionType ... </tenv>
        <envF> Rho => Rho [ X <- FV ] </envF>
 
+  // Simplification: single-element IdentifierList to Id
+  // K's List macro can represent single Id as IdentifierList, need to simplify
+  rule <k> IL:IdentifierList = E:Exp => extractSingleId(IL) = E ... </k>
+    requires lenIdList(IL) ==Int 1
+
+  rule <k> IL:IdentifierList := E:Exp => extractSingleId(IL) := E ... </k>
+    requires lenIdList(IL) ==Int 1
+
+  syntax Id ::= extractSingleId(IdentifierList) [function]
+  rule extractSingleId(X:Id) => X
+  rule extractSingleId(X:Id , .IdentifierList) => X
+
   // Multiple assignment from tuple (from function call)
   // a, b = f() where f() returns tuple(...)
   syntax KItem ::= assignFromTuple(IdentifierList, List)
   syntax KItem ::= evalForAssign(IdentifierList, K)
 
-  // Special case: multi-variable assignment from function call returning tuple
+  // Multi-variable assignment (2+ identifiers)
   rule <k> IL:IdentifierList = (E:Exp , .ExpressionList) => evalForAssign(IL, E) ... </k>
     requires lenIdList(IL) >=Int 2
 
@@ -131,7 +167,7 @@ module GO
   syntax KItem ::= declareFromTuple(IdentifierList, List)
   syntax KItem ::= evalForDeclare(IdentifierList, K)
 
-  // Special case: multi-variable short declaration from function call returning tuple
+  // Multi-variable short declaration (2+ identifiers)
   rule <k> IL:IdentifierList := (E:Exp , .ExpressionList) => evalForDeclare(IL, E) ... </k>
     requires lenIdList(IL) >=Int 2
 
