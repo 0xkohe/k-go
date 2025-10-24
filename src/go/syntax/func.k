@@ -3,12 +3,23 @@ requires "core.k"
 
 module GO-SYNTAX-FUNC
   imports GO-SYNTAX
+  imports MAP
 
   // Grammar follows the official Go specification.
 
   // Go specification: FunctionType = "func" Signature .
   syntax Type ::= FunctionType
   syntax FunctionType ::= "func" FunctionSignature
+
+  // Go specification: Function values
+  // A function value represents a function (named or anonymous) with a closure environment
+  // FuncVal stores: parameter IDs, parameter types, return type, body, and captured environment
+  syntax FuncVal ::= funcVal(ParamIds, ParamTypes, RetType, Block, Map, Map)
+                     // funcVal(paramIds, paramTypes, retType, body, closureEnvI, closureEnvB)
+  syntax Exp ::= FuncVal
+
+  // Go specification: The zero value of function type is nil
+  syntax FuncVal ::= "nil"
 
   // Go specification: Signature = Parameters [ Result ] .
   syntax FunctionSignature ::= Parameters
@@ -28,7 +39,9 @@ module GO-SYNTAX-FUNC
                          | Type         // unnamed parameter (for return types)
 
   // Function calls (not explicitly in spec grammar, but part of PrimaryExpr → Call)
-  syntax Call      ::= Id "(" ArgList ")"
+  // Go specification: PrimaryExpr Arguments
+  syntax Call      ::= Id "(" ArgList ")" [prefer]  // Named function call
+                     | Exp "(" ArgList ")" [strict(1), avoid]  // Function value call (evaluate Exp first)
   syntax ArgList   ::= List{Exp, ","}
 
   // Go specification: ReturnStmt = "return" [ ExpressionList ] .
