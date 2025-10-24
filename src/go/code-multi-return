@@ -1,0 +1,13 @@
+package main
+
+func pair() (int, int) {
+    return tuple(ListItem(1) ListItem(2));
+}
+
+func main() {
+    var x int = 0;
+    var y int = 0;
+    x, y = pair();
+    print(x);
+    print(y);
+}

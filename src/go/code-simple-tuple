@@ -1,0 +1,9 @@
+package main
+
+func pair() (int, int) {
+    return tuple(ListItem(1) ListItem(2));
+}
+
+func main() {
+    print(1);
+}

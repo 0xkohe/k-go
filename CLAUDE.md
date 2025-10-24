@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a K Framework project implementing a subset of the Go programming language semantics. The project uses Docker for K Framework tooling and defines formal semantics for Go language features including functions, control flow, scoping, and basic types.
 
+## Reference Documentation
+
+For detailed information:
+- **K Framework**: See `K_framework_documentation.md` in the root directory for comprehensive K Framework language reference, semantics, and tooling information.
+- **Go specification**: See `src/go/go_language_specification.txt` for the official Go language specification when implementing or extending Go features.
+
+**Important**: When implementing Go language features, always refer to the Go specification and align naming, terminology, and syntax elements as closely as possible with the official specification to maintain consistency and correctness.
+
 ## Development Environment
 
 The project runs inside a Docker container with K Framework pre-installed:
@@ -47,6 +55,23 @@ krun code.txt --debugger
 # Run with specific program argument
 krun -cPGM=0 --debugger
 ```
+
+### Testing After Changes
+
+After modifying K definitions, run the following commands from the project root to verify changes:
+
+```bash
+# 1. Recompile the definitions
+docker compose exec k bash -c "cd go && kompile main.k"
+
+# 2. Run test program to verify changes
+docker compose exec k bash -c "cd go && krun code --definition main-kompiled/"
+```
+
+These commands ensure that:
+- The K definitions compile without errors
+- Existing test programs still execute correctly
+- No regressions are introduced by the changes
 
 ## Architecture
 
