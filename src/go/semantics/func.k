@@ -31,16 +31,46 @@ module GO-FUNC
 
   syntax KItem ::= returnSignal(K)
 
+  // Return statement evaluation
   rule <k> return       => returnSignal(.K) ... </k>
-  rule <k> return V:Exp => returnSignal(V) ... </k> 
-  
-  rule <k> returnSignal(V) ~> exitScope => exitScope ~> returnSignal(V) ... </k>
+  rule <k> return V:Exp => returnSignal(V) ... </k>
 
+  // Multiple value return: convert ExpressionList to tuple
+  // Only match when there are 2+ elements to avoid conflict with single Exp
+  syntax KItem ::= evalReturnList(ExpressionList, List)
+
+  rule <k> return EL:ExpressionList => evalReturnList(EL, .List) ... </k>
+    requires lenExpList(EL) >=Int 2
+
+  // Evaluate each element in ExpressionList and accumulate in List
+  rule <k> evalReturnList((V:Int , Rest:ExpressionList), Acc:List)
+        => evalReturnList(Rest, Acc ListItem(V)) ... </k>
+  rule <k> evalReturnList((V:Bool , Rest:ExpressionList), Acc:List)
+        => evalReturnList(Rest, Acc ListItem(V)) ... </k>
+  rule <k> evalReturnList(V:Int, Acc:List)
+        => returnTuple(tuple(Acc ListItem(V))) ... </k>
+  rule <k> evalReturnList(V:Bool, Acc:List)
+        => returnTuple(tuple(Acc ListItem(V))) ... </k>
+  rule <k> evalReturnList(.ExpressionList, Acc:List)
+        => returnTuple(tuple(Acc)) ... </k>
+
+  // Context: evaluate non-value expressions in evalReturnList
+  context evalReturnList((HOLE:Exp , _:ExpressionList), _)
+  context evalReturnList(HOLE:Exp, _)
+
+  // Internal tuple return
+  rule <k> returnTuple(T:Tuple) => returnSignal(T) ... </k>
+
+  rule <k> returnSignal(V) ~> exitScope => exitScope ~> returnSignal(V) ... </k>
   rule <k> returnSignal(V) ~> _KI:KItem => returnSignal(V) ... </k> [owise]
 
+  // Single value returns
   rule <k> returnSignal(_V) ~> returnJoin(void) => .K ... </k>
   rule <k> returnSignal(V:Int)  ~> returnJoin(int)  => V ... </k>
   rule <k> returnSignal(V:Bool) ~> returnJoin(bool) => V ... </k>
+
+  // Multiple value returns (tuple)
+  rule <k> returnSignal(tuple(L:List)) ~> returnJoin(_PS:Parameters) => tuple(L) ... </k>
 
   rule <k> returnJoin(void) => .K ... </k>
   // Non-void functions without explicit return remain stuck.

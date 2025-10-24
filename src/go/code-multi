@@ -1,0 +1,15 @@
+package main
+
+func swap(x int, y int) (int, int) {
+    return y, x;
+}
+
+func main() {
+    var a int = 1;
+    var b int = 2;
+    print(a);
+    print(b);
+
+    var result int = swap(a, b);
+    print(result);
+}

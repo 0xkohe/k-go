@@ -17,6 +17,7 @@ module GO-SYNTAX
   imports UNSIGNED-INT-SYNTAX
   imports BOOL-SYNTAX
   imports ID-SYNTAX
+  imports LIST
 
   syntax TopDecl
   syntax TopDecls ::= List{TopDecl, ";"}
@@ -36,17 +37,31 @@ module GO-SYNTAX
   // Go specification: IdentifierList = identifier { "," identifier } .
   syntax IdentifierList ::= List{Id, ","}
 
+  // Internal: Tuple for representing multiple return values/tuples
+  // Using List, renamed to avoid conflict with MAP.values
+  syntax Tuple ::= "tuple" "(" List ")"
+  syntax Exp ::= Tuple
+
+  // Helper: Create tuple from ExpressionList (used internally)
+  syntax Tuple ::= makeTuple(ExpressionList) [function]
+
   // Go specification: SimpleStmt = EmptyStmt | ExpressionStmt | SendStmt | IncDecStmt | Assignment | ShortVarDecl .
   // Note: EmptyStmt and ExpressionStmt are not explicitly represented to avoid parsing ambiguities
   syntax SimpleStmt ::= Assignment | ShortVarDecl | IncDecStmt
 
   // Go specification: Assignment = ExpressionList assign_op ExpressionList .
-  // Simplified: only single assignment with "=" operator for now
-  syntax Assignment ::= Id "=" Exp [strict(2)]
+  // Single assignment (most common case)
+  syntax Assignment ::= Id "=" Exp [strict(2), prefer]
+  // Multiple assignment (must have at least 2 identifiers)
+  // Note: no strict annotation - evaluation handled manually in semantics
+  syntax Assignment ::= IdentifierList "=" ExpressionList [avoid]
 
   // Go specification: ShortVarDecl = IdentifierList ":=" ExpressionList .
-  // Simplified: only single variable declaration for now
-  syntax ShortVarDecl ::= Id ":=" Exp [strict(2)]
+  // Single declaration (most common case)
+  syntax ShortVarDecl ::= Id ":=" Exp [strict(2), prefer]
+  // Multiple declaration (must have at least 2 identifiers)
+  // Note: no strict annotation - evaluation handled manually in semantics
+  syntax ShortVarDecl ::= IdentifierList ":=" ExpressionList [avoid]
 
   // Go specification: IncDecStmt = Expression ( "++" | "--" ) .
   // Simplified: only Id for now (will expand to Expression later)

@@ -1,0 +1,11 @@
+package main
+
+func pair() (int, int) {
+    return 3, 4;
+}
+
+func main() {
+    x, y := pair();
+    print(x);
+    print(y);
+}

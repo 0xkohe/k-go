@@ -78,6 +78,67 @@ module GO
        <tenv> ... X |-> bool ... </tenv>
        <envB> Rho => Rho [ X <- B ] </envB>
 
+  // Multiple assignment from tuple (from function call)
+  // a, b = f() where f() returns tuple(...)
+  syntax KItem ::= assignFromTuple(IdentifierList, List)
+  syntax KItem ::= evalForAssign(IdentifierList, K)
+
+  // Special case: multi-variable assignment from function call returning tuple
+  rule <k> IL:IdentifierList = (E:Exp , .ExpressionList) => evalForAssign(IL, E) ... </k>
+    requires lenIdList(IL) >=Int 2
+
+  context evalForAssign(_, HOLE:KItem)
+
+  rule <k> evalForAssign(IL, tuple(L:List)) => assignFromTuple(IL, L) ... </k>
+
+  rule <k> assignFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Int) LRest:List)) => assignFromTuple(ILRest, LRest) ... </k>
+       <tenv> ... X |-> int ... </tenv>
+       <envI> Rho => Rho [ X <- V ] </envI>
+
+  rule <k> assignFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Bool) LRest:List)) => assignFromTuple(ILRest, LRest) ... </k>
+       <tenv> ... X |-> bool ... </tenv>
+       <envB> Rho => Rho [ X <- V ] </envB>
+
+  rule <k> assignFromTuple(X:Id, ListItem(V:Int)) => .K ... </k>
+       <tenv> ... X |-> int ... </tenv>
+       <envI> Rho => Rho [ X <- V ] </envI>
+
+  rule <k> assignFromTuple(X:Id, ListItem(V:Bool)) => .K ... </k>
+       <tenv> ... X |-> bool ... </tenv>
+       <envB> Rho => Rho [ X <- V ] </envB>
+
+  rule <k> assignFromTuple(.IdentifierList, .List) => .K ... </k>
+
+  // Multiple short variable declaration from tuple
+  syntax KItem ::= declareFromTuple(IdentifierList, List)
+  syntax KItem ::= evalForDeclare(IdentifierList, K)
+
+  // Special case: multi-variable short declaration from function call returning tuple
+  rule <k> IL:IdentifierList := (E:Exp , .ExpressionList) => evalForDeclare(IL, E) ... </k>
+    requires lenIdList(IL) >=Int 2
+
+  context evalForDeclare(_, HOLE:KItem)
+
+  rule <k> evalForDeclare(IL, tuple(L:List)) => declareFromTuple(IL, L) ... </k>
+
+  rule <k> declareFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Int) LRest:List)) => declareFromTuple(ILRest, LRest) ... </k>
+       <tenv> TEnv => TEnv [ X <- int ] </tenv>
+       <envI> Rho => Rho [ X <- V ] </envI>
+
+  rule <k> declareFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Bool) LRest:List)) => declareFromTuple(ILRest, LRest) ... </k>
+       <tenv> TEnv => TEnv [ X <- bool ] </tenv>
+       <envB> Rho => Rho [ X <- V ] </envB>
+
+  rule <k> declareFromTuple(X:Id, ListItem(V:Int)) => .K ... </k>
+       <tenv> TEnv => TEnv [ X <- int ] </tenv>
+       <envI> Rho => Rho [ X <- V ] </envI>
+
+  rule <k> declareFromTuple(X:Id, ListItem(V:Bool)) => .K ... </k>
+       <tenv> TEnv => TEnv [ X <- bool ] </tenv>
+       <envB> Rho => Rho [ X <- V ] </envB>
+
+  rule <k> declareFromTuple(.IdentifierList, .List) => .K ... </k>
+
   rule <k> X:Id => I ... </k>
        <envI> ... X |-> I:Int ... </envI>
   rule <k> X:Id => B ... </k>
@@ -153,5 +214,32 @@ module GO
   syntax Bool ::= isKResult(K) [symbol(isKResult), function]
   rule isKResult(_:Int)  => true
   rule isKResult(_:Bool) => true
+  rule isKResult(tuple(_)) => true
   rule isKResult(_)      => false [owise]
+
+  // Context rule: evaluate elements in ExpressionList (for 2+ elements)
+  // This heats the first non-value element
+  context (HOLE:Exp , _:Exp , _:ExpressionList)
+  context (HOLE:Exp , _:Exp)
+
+  // Helper to convert ExpressionList to List for values
+  syntax List ::= expListToList(ExpressionList) [function]
+  rule expListToList(.ExpressionList) => .List
+  rule expListToList(E:Exp , EL:ExpressionList) => ListItem(E) expListToList(EL)
+  rule expListToList(E:Exp) => ListItem(E)
+
+  // Helper to create tuple from ExpressionList
+  rule makeTuple(EL:ExpressionList) => tuple(expListToList(EL))
+
+  // Helper to get length of ExpressionList
+  syntax Int ::= lenExpList(ExpressionList) [function]
+  rule lenExpList(.ExpressionList) => 0
+  rule lenExpList(_:Exp , EL:ExpressionList) => 1 +Int lenExpList(EL)
+  rule lenExpList(_:Exp) => 1
+
+  // Helper to get length of IdentifierList
+  syntax Int ::= lenIdList(IdentifierList) [function]
+  rule lenIdList(.IdentifierList) => 0
+  rule lenIdList(_:Id , IL:IdentifierList) => 1 +Int lenIdList(IL)
+  rule lenIdList(_:Id) => 1
 endmodule
