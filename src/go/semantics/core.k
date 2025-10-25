@@ -132,17 +132,21 @@ module GO
        <env> ... X |-> L:Int ... </env>
        <store> Store => Store [ L <- FV ] </store>
 
-  // Simplification: single-element IdentifierList to Id
-  // K's List macro can represent single Id as IdentifierList, need to simplify
-  rule <k> IL:IdentifierList = E:Exp => extractSingleId(IL) = E ... </k>
-    requires lenIdList(IL) ==Int 1
+  // Simplification: single-element IdentifierList/ExpressionList to Id/Exp
+  // K's List macro can represent single elements as lists, need to simplify
+  rule <k> IL:IdentifierList = EL:ExpressionList => extractSingleId(IL) = extractSingleExp(EL) ... </k>
+    requires lenIdList(IL) ==Int 1 andBool lenExpList(EL) ==Int 1
 
-  rule <k> IL:IdentifierList := E:Exp => extractSingleId(IL) := E ... </k>
-    requires lenIdList(IL) ==Int 1
+  rule <k> IL:IdentifierList := EL:ExpressionList => extractSingleId(IL) := extractSingleExp(EL) ... </k>
+    requires lenIdList(IL) ==Int 1 andBool lenExpList(EL) ==Int 1
 
   syntax Id ::= extractSingleId(IdentifierList) [function]
   rule extractSingleId(X:Id) => X
   rule extractSingleId(X:Id , .IdentifierList) => X
+
+  syntax Exp ::= extractSingleExp(ExpressionList) [function]
+  rule extractSingleExp(E:Exp) => E
+  rule extractSingleExp(E:Exp , .ExpressionList) => E
 
   // Multiple assignment from tuple (from function call)
   // a, b = f() where f() returns tuple(...)
