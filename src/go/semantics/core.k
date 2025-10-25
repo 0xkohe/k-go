@@ -247,14 +247,20 @@ module GO
   rule <k> X:Id -- => X = (X - 1) ... </k>
        <tenv> ... X |-> int ... </tenv>
 
-  rule <k> if S:SimpleStmt ; E:Exp B:Block => S ~> if E B ... </k>
-  rule <k> if S:SimpleStmt ; E:Exp B1:Block else B2:Block => S ~> if E B1 else B2 ... </k>
-  rule <k> if S:SimpleStmt ; E:Exp B1:Block else I2:IfStmt => S ~> if E B1 else I2 ... </k>
+  // Go specification: if statement with SimpleStmt creates an implicit block
+  // Variables declared in S are only visible within the if statement
+  rule <k> if S:SimpleStmt ; E:Exp B:Block => enterScope(S ~> if E B) ... </k>
+  rule <k> if S:SimpleStmt ; E:Exp B1:Block else B2:Block => enterScope(S ~> if E B1 else B2) ... </k>
+  rule <k> if S:SimpleStmt ; E:Exp B1:Block else I2:IfStmt => enterScope(S ~> if E B1 else I2) ... </k>
 
+  // if condition evaluation and branch selection
+  // These rules work both with and without exitScope (using ... to match rest)
   rule <k> if true  B:Block => B  ... </k>
   rule <k> if false _B:Block => .K ... </k>
   rule <k> if true  B1:Block else _B2:Block => B1 ... </k>
   rule <k> if false _B1:Block else B2:Block => B2 ... </k>
+  rule <k> if true  B:Block else _I2:IfStmt => B ... </k>
+  rule <k> if false _B:Block else I2:IfStmt => I2 ... </k>
 
   // Go specification: For loop internals
   syntax KItem ::= loop(Exp, K, Block)
