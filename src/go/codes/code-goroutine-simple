@@ -1,0 +1,11 @@
+package main
+
+func printNum(n int) {
+	print(n);
+}
+
+func main() {
+	print(1);
+	go printNum(42);
+	print(2);
+}

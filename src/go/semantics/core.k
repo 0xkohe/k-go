@@ -1,10 +1,12 @@
 requires "domains.md"
 requires "../syntax/core.k"
 requires "../syntax/func.k"
+requires "../syntax/concurrent.k"
 
 module GO
   imports GO-SYNTAX
   imports GO-SYNTAX-FUNC
+  imports GO-SYNTAX-CONCURRENT
   imports INT
   imports LIST
   imports BOOL
@@ -13,17 +15,25 @@ module GO
 
   configuration
     <T>
-      <k> $PGM:Program </k>
+      <threads>
+        <thread multiplicity="*" type="Set">
+          <tid> 0 </tid>
+          <k> $PGM:Program </k>
+          <tenv> .Map </tenv>
+          <env> .Map </env>  // Id -> Location (unified environment for all types)
+          <envStack> .List </envStack>  // Stack for block scoping
+          <tenvStack> .List </tenvStack>
+          <scopeDecls> .List </scopeDecls>
+        </thread>
+      </threads>
+      <nextTid> 1 </nextTid>
       <out> .List </out>
-      <tenv> .Map </tenv>
-      <env> .Map </env>  // Id -> Location (unified environment for all types)
       <store> .Map </store>  // Location -> Value (all values stored here)
       <nextLoc> 0 </nextLoc>  // Next available location
-      <envStack> .List </envStack>  // Stack for block scoping
-      <tenvStack> .List </tenvStack>
-      <scopeDecls> .List </scopeDecls>
       <constEnv> .Map </constEnv>  // Id -> ConstValue (compile-time constants)
       <fenv> .Map </fenv>  // Function definitions (name -> definition)
+      <channels> .Map </channels>  // Channel ID -> Channel state
+      <nextChanId> 0 </nextChanId>
     </T>
 
   // Location type for store-based semantics
@@ -400,11 +410,14 @@ module GO
   rule <k> false || E:Exp => E ... </k>
   rule <k> ! B:Bool           => notBool B    ... </k>
 
-  rule <k> X:Id ++ => X = (X + 1) ... </k>
-       <tenv> ... X |-> int ... </tenv>
+  // Direct implementation of increment/decrement (avoids parsing ambiguity)
+  rule <k> X:Id ++ => .K ... </k>
+       <env> ... X |-> L:Int ... </env>
+       <store> ... L |-> (V:Int => V +Int 1) ... </store>
 
-  rule <k> X:Id -- => X = (X - 1) ... </k>
-       <tenv> ... X |-> int ... </tenv>
+  rule <k> X:Id -- => .K ... </k>
+       <env> ... X |-> L:Int ... </env>
+       <store> ... L |-> (V:Int => V -Int 1) ... </store>
 
   // Go specification: if statement with SimpleStmt creates an implicit block
   // Variables declared in S are only visible within the if statement
@@ -501,13 +514,8 @@ module GO
 
   rule <k> continueSignal ~> rangeLoop(I, N, B) => rangeLoop(I +Int 1, N, B) ... </k>
 
-  syntax Bool ::= isKResult(K) [symbol(isKResult), function]
-  rule isKResult(_:Int)  => true
-  rule isKResult(_:Bool) => true
-  rule isKResult(tuple(_)) => true
-  rule isKResult(_:FuncVal) => true
-  rule isKResult(_)      => false [owise]
-
+  // Define KResult subsorts for value types
+  syntax KResult ::= Int | Bool | FuncVal | Tuple
 
   // Helper to convert ExpressionList to List for values
   syntax List ::= expListToList(ExpressionList) [function]

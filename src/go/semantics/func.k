@@ -19,21 +19,15 @@ module GO-FUNC
   syntax KItem ::= returnJoin(RetType)
   syntax KItem ::= bindParams(ParamIds, ParamTypes, ArgList)
 
-  // Helper to evaluate all arguments before calling
-  syntax KItem ::= evalAndCall(Id, ArgList, ParamIds, ParamTypes, RetType, Block)
+  // Context rules to evaluate arguments
+  context _:Id ( HOLE:Exp , _:ArgList )
+  context _:Id ( _:Exp , HOLE:Exp , _:ArgList )
+  context _:Id ( _:Exp , _:Exp , HOLE:Exp , _:ArgList )
+  context _:Id ( HOLE:Exp )
 
   // Go specification: Named function call (looks up function definition)
-  rule <k> F:Id (AL:ArgList) => evalAndCall(F, AL, PIs, PTs, RT, B) ... </k>
+  rule <k> F:Id (AL:ArgList) => enterScope(bindParams(PIs, PTs, AL) ~> B) ~> returnJoin(RT) ... </k>
      <fenv> ... F |-> fun(PIs, PTs, RT, B) ... </fenv>
-
-  // Evaluate arguments using context for each position
-  context evalAndCall(_, (HOLE , _), _, _, _, _)
-  context evalAndCall(_, (_ , HOLE , _), _, _, _, _)
-  context evalAndCall(_, (_ , _ , HOLE), _, _, _, _)
-  context evalAndCall(_, (HOLE), _, _, _, _)
-
-  // Once all arguments are evaluated, proceed with the call
-  rule <k> evalAndCall(_F, AL, PIs, PTs, RT, B) => enterScope(bindParams(PIs, PTs, AL) ~> B) ~> returnJoin(RT) ... </k>
     requires allValues(AL)
 
   syntax Bool ::= allValues(ArgList) [function]
