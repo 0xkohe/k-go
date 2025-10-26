@@ -69,6 +69,7 @@ module GO-SYNTAX
 
   syntax Statement ::= SimpleStmt | Print | Block | IfStmt | ForStmt | BreakStmt | ContinueStmt
                      | "var" Id Type "=" Exp  [strict(3)]
+                     | "var" Id Type
 
   syntax Print ::= "print" "(" Exp ")" [strict]
 

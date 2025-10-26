@@ -33,17 +33,17 @@ module GO-FUNC
   context evalAndCall(_, (HOLE), _, _, _, _)
 
   // Once all arguments are evaluated, proceed with the call
-  rule <k> evalAndCall(F, AL, PIs, PTs, RT, B) => enterScope(bindParams(PIs, PTs, AL) ~> B) ~> returnJoin(RT) ... </k>
+  rule <k> evalAndCall(_F, AL, PIs, PTs, RT, B) => enterScope(bindParams(PIs, PTs, AL) ~> B) ~> returnJoin(RT) ... </k>
     requires allValues(AL)
 
   syntax Bool ::= allValues(ArgList) [function]
   rule allValues(.ArgList) => true
-  rule allValues(V:Int) => true
-  rule allValues(V:Bool) => true
-  rule allValues(V:FuncVal) => true
-  rule allValues((V:Int , Rest:ArgList)) => allValues(Rest)
-  rule allValues((V:Bool , Rest:ArgList)) => allValues(Rest)
-  rule allValues((V:FuncVal , Rest:ArgList)) => allValues(Rest)
+  rule allValues(_V:Int) => true
+  rule allValues(_V:Bool) => true
+  rule allValues(_V:FuncVal) => true
+  rule allValues((_V:Int , Rest:ArgList)) => allValues(Rest)
+  rule allValues((_V:Bool , Rest:ArgList)) => allValues(Rest)
+  rule allValues((_V:FuncVal , Rest:ArgList)) => allValues(Rest)
   rule allValues(_) => false [owise]
 
   // If F is not in fenv, evaluate it as a variable and retry the call

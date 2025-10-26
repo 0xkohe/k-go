@@ -21,6 +21,7 @@ module GO
       <nextLoc> 0 </nextLoc>  // Next available location
       <envStack> .List </envStack>  // Stack for block scoping
       <tenvStack> .List </tenvStack>
+      <scopeDecls> .List </scopeDecls>
       <fenv> .Map </fenv>  // Function definitions (name -> definition)
     </T>
 
@@ -45,10 +46,12 @@ module GO
        <env> E </env>
        <tenvStack> TS => TS ListItem(T) </tenvStack>
        <envStack> ES => ES ListItem(E) </envStack>
+       <scopeDecls> SD => SD ListItem(.Map) </scopeDecls>
 
   rule <k> exitScope => .K ... </k>
        <tenvStack> (TS ListItem(T)) => TS </tenvStack>
        <envStack> (ES ListItem(E)) => ES </envStack>
+       <scopeDecls> (SD ListItem(_)) => SD </scopeDecls>
        <tenv> _ => T </tenv>
        <env> _ => E </env>
 
@@ -56,17 +59,23 @@ module GO
        <out> OL => OL ListItem(I) </out>
 
   // Variable declarations with store-based semantics
+  rule <k> var X:Id int => var X int = 0 ... </k>
+  rule <k> var X:Id bool => var X bool = false ... </k>
+  rule <k> var X:Id FT:FunctionType => var X FT = nil ... </k>
+
   rule <k> var X:Id int = I:Int => .K ... </k>
        <tenv> R => R [ X <- int ] </tenv>
        <env> Env => Env [ X <- L ] </env>
        <store> Store => Store [ L <- I ] </store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
 
   rule <k> var X:Id bool = B:Bool => .K ... </k>
        <tenv> R => R [ X <- bool ] </tenv>
        <env> Env => Env [ X <- L ] </env>
        <store> Store => Store [ L <- B ] </store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
 
   // Go specification: Function type variable declaration
   // The zero value of function type is nil
@@ -75,6 +84,7 @@ module GO
        <env> Env => Env [ X <- L ] </env>
        <store> Store => Store [ L <- FV ] </store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
 
   // Short variable declarations with store-based semantics
   rule <k> X:Id := I:Int => .K ... </k>
@@ -82,12 +92,16 @@ module GO
        <env> Env => Env [ X <- L ] </env>
        <store> Store => Store [ L <- I ] </store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+    requires notBool (X in_keys(ScopeMap))
 
   rule <k> X:Id := B:Bool => .K ... </k>
        <tenv> R => R [ X <- bool ] </tenv>
        <env> Env => Env [ X <- L ] </env>
        <store> Store => Store [ L <- B ] </store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+    requires notBool (X in_keys(ScopeMap))
 
   // Go specification: Short variable declaration with function value
   // Infer function type from funcVal
@@ -115,6 +129,14 @@ module GO
        <env> CurEnv => CurEnv [ X <- L ] </env>
        <store> Store => Store [ L <- funcVal(PIs, PTs, RT, Body, TEnv, Env, .Map) ] </store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+    requires notBool (X in_keys(ScopeMap))
+
+  syntax KItem ::= "shortDeclError"
+
+  rule <k> X:Id := V => shortDeclError ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
+    requires X in_keys(ScopeMap) andBool isKResult(V)
 
   // Assignment with store-based semantics (update value at location)
   rule <k> X:Id = I:Int => .K ... </k>
@@ -183,43 +205,116 @@ module GO
 
   rule <k> assignFromTuple(.IdentifierList, .List) => .K ... </k>
 
-  // Multiple short variable declaration from tuple
-  syntax KItem ::= declareFromTuple(IdentifierList, List)
-  syntax KItem ::= evalForDeclare(IdentifierList, K)
+  // Multiple short variable declaration (handles mix of new and existing identifiers)
+  syntax KItem ::= evalForShortDecl(IdentifierList, K, Map)
+  syntax KItem ::= shortDeclFromTuple(IdentifierList, List, Map)
 
   // Multi-variable short declaration (2+ identifiers)
-  rule <k> IL:IdentifierList := (E:Exp , .ExpressionList) => evalForDeclare(IL, E) ... </k>
+  rule <k> IL:IdentifierList := (E:Exp , .ExpressionList) => evalForShortDecl(IL, E, ScopeMap) ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
     requires lenIdList(IL) >=Int 2
+     andBool hasNewIdList(IL, ScopeMap)
 
-  context evalForDeclare(_, HOLE:KItem)
+  rule <k> IL:IdentifierList := (_E:Exp , .ExpressionList) => shortDeclError ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
+    requires lenIdList(IL) >=Int 2
+     andBool notBool hasNewIdList(IL, ScopeMap)
 
-  rule <k> evalForDeclare(IL, tuple(L:List)) => declareFromTuple(IL, L) ... </k>
+  context evalForShortDecl(_, HOLE:KItem, _)
 
-  rule <k> declareFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Int) LRest:List)) => declareFromTuple(ILRest, LRest) ... </k>
+  rule <k> evalForShortDecl(IL, tuple(L:List), ScopeMap) => shortDeclFromTuple(IL, L, ScopeMap) ... </k>
+
+  rule <k> shortDeclFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Int) LRest:List), ScopeMap)
+        => shortDeclFromTuple(ILRest, LRest, ScopeMap) ... </k>
        <tenv> TEnv => TEnv [ X <- int ] </tenv>
        <env> Env => Env [ X <- L ] </env>
        <store> Store => Store [ L <- V ] </store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(CurrentMap)) => SD ListItem(CurrentMap [ X <- true ]) </scopeDecls>
+    requires notBool (X in_keys(ScopeMap))
 
-  rule <k> declareFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Bool) LRest:List)) => declareFromTuple(ILRest, LRest) ... </k>
+  rule <k> shortDeclFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Bool) LRest:List), ScopeMap)
+        => shortDeclFromTuple(ILRest, LRest, ScopeMap) ... </k>
        <tenv> TEnv => TEnv [ X <- bool ] </tenv>
        <env> Env => Env [ X <- L ] </env>
        <store> Store => Store [ L <- V ] </store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(CurrentMap)) => SD ListItem(CurrentMap [ X <- true ]) </scopeDecls>
+    requires notBool (X in_keys(ScopeMap))
 
-  rule <k> declareFromTuple(X:Id, ListItem(V:Int)) => .K ... </k>
+  rule <k> shortDeclFromTuple((X:Id , ILRest:IdentifierList), (ListItem(funcVal(PIs:ParamIds, PTs:ParamTypes, RT:RetType, Body:Block, TEnv:Map, Env:Map, _:Map)) LRest:List), ScopeMap)
+        => shortDeclFromTuple(ILRest, LRest, ScopeMap) ... </k>
+       <tenv> CurTEnv => CurTEnv [ X <- inferFuncType(PTs, RT) ] </tenv>
+       <env> CurEnv => CurEnv [ X <- L ] </env>
+       <store> Store => Store [ L <- funcVal(PIs, PTs, RT, Body, TEnv, Env, .Map) ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(CurrentMap)) => SD ListItem(CurrentMap [ X <- true ]) </scopeDecls>
+    requires notBool (X in_keys(ScopeMap))
+
+  rule <k> shortDeclFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Int) LRest:List), ScopeMap)
+        => shortDeclFromTuple(ILRest, LRest, ScopeMap) ... </k>
+       <tenv> ... X |-> int ... </tenv>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- V ] </store>
+    requires X in_keys(ScopeMap)
+
+  rule <k> shortDeclFromTuple((X:Id , ILRest:IdentifierList), (ListItem(V:Bool) LRest:List), ScopeMap)
+        => shortDeclFromTuple(ILRest, LRest, ScopeMap) ... </k>
+       <tenv> ... X |-> bool ... </tenv>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- V ] </store>
+    requires X in_keys(ScopeMap)
+
+  rule <k> shortDeclFromTuple((X:Id , ILRest:IdentifierList), (ListItem(FV:FuncVal) LRest:List), ScopeMap)
+        => shortDeclFromTuple(ILRest, LRest, ScopeMap) ... </k>
+       <tenv> ... X |-> _FT:FunctionType ... </tenv>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- FV ] </store>
+    requires X in_keys(ScopeMap)
+
+  rule <k> shortDeclFromTuple(X:Id, ListItem(V:Int), ScopeMap) => .K ... </k>
        <tenv> TEnv => TEnv [ X <- int ] </tenv>
        <env> Env => Env [ X <- L ] </env>
        <store> Store => Store [ L <- V ] </store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(CurrentMap)) => SD ListItem(CurrentMap [ X <- true ]) </scopeDecls>
+    requires notBool (X in_keys(ScopeMap))
 
-  rule <k> declareFromTuple(X:Id, ListItem(V:Bool)) => .K ... </k>
+  rule <k> shortDeclFromTuple(X:Id, ListItem(V:Bool), ScopeMap) => .K ... </k>
        <tenv> TEnv => TEnv [ X <- bool ] </tenv>
        <env> Env => Env [ X <- L ] </env>
        <store> Store => Store [ L <- V ] </store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(CurrentMap)) => SD ListItem(CurrentMap [ X <- true ]) </scopeDecls>
+    requires notBool (X in_keys(ScopeMap))
 
-  rule <k> declareFromTuple(.IdentifierList, .List) => .K ... </k>
+  rule <k> shortDeclFromTuple(X:Id, ListItem(funcVal(PIs:ParamIds, PTs:ParamTypes, RT:RetType, Body:Block, TEnv:Map, Env:Map, _:Map)), ScopeMap) => .K ... </k>
+       <tenv> CurTEnv => CurTEnv [ X <- inferFuncType(PTs, RT) ] </tenv>
+       <env> CurEnv => CurEnv [ X <- L ] </env>
+       <store> Store => Store [ L <- funcVal(PIs, PTs, RT, Body, TEnv, Env, .Map) ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(CurrentMap)) => SD ListItem(CurrentMap [ X <- true ]) </scopeDecls>
+    requires notBool (X in_keys(ScopeMap))
+
+  rule <k> shortDeclFromTuple(X:Id, ListItem(V:Int), ScopeMap) => .K ... </k>
+       <tenv> ... X |-> int ... </tenv>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- V ] </store>
+    requires X in_keys(ScopeMap)
+
+  rule <k> shortDeclFromTuple(X:Id, ListItem(V:Bool), ScopeMap) => .K ... </k>
+       <tenv> ... X |-> bool ... </tenv>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- V ] </store>
+    requires X in_keys(ScopeMap)
+
+  rule <k> shortDeclFromTuple(X:Id, ListItem(FV:FuncVal), ScopeMap) => .K ... </k>
+       <tenv> ... X |-> _FT:FunctionType ... </tenv>
+       <env> ... X |-> L:Int ... </env>
+       <store> Store => Store [ L <- FV ] </store>
+    requires X in_keys(ScopeMap)
+
+  rule <k> shortDeclFromTuple(.IdentifierList, .List, _ScopeMap) => .K ... </k>
 
   // Variable lookup with store-based semantics
   rule <k> X:Id => V ... </k>
@@ -327,4 +422,9 @@ module GO
   rule lenIdList(.IdentifierList) => 0
   rule lenIdList(_:Id , IL:IdentifierList) => 1 +Int lenIdList(IL)
   rule lenIdList(_:Id) => 1
+
+  syntax Bool ::= hasNewIdList(IdentifierList, Map) [function]
+  rule hasNewIdList(.IdentifierList, _M:Map) => false
+  rule hasNewIdList(X:Id , IL:IdentifierList, M:Map) => notBool (X in_keys(M)) orBool hasNewIdList(IL, M)
+  rule hasNewIdList(X:Id, M:Map) => notBool (X in_keys(M))
 endmodule
