@@ -129,6 +129,7 @@ module GO-SYNTAX
   // Go specification: RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
   // Current implementation: integer range only (Go 1.22+)
   // Future: arrays, slices, maps, strings, channels
-  syntax RangeClause ::= IdentifierList ":=" "range" Exp [strict(2)]  // for i := range n (or i, v for collections)
-                       | "range" Exp                     [strict(1)]  // for range n (no iteration variable)
+  // Note: strict annotations are not needed because context rules handle evaluation
+  syntax RangeClause ::= IdentifierList ":=" "range" Exp  // for i := range n (or i, v for collections)
+                       | "range" Exp                       // for range n (no iteration variable)
 endmodule

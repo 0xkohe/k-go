@@ -36,13 +36,14 @@ syntax ForStmt ::= "for" Block                      // 無限ループ
 // Go specification: RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
 // Current implementation: integer range only (Go 1.22+)
 // Future: arrays, slices, maps, strings, channels
-syntax RangeClause ::= IdentifierList ":=" "range" Exp [strict(2)]  // for i := range n（またはコレクション用のi, v）
-                     | "range" Exp                     [strict(1)]  // for range n（反復変数なし）
+// Note: strict annotations are not needed because context rules handle evaluation
+syntax RangeClause ::= IdentifierList ":=" "range" Exp  // for i := range n（またはコレクション用のi, v）
+                     | "range" Exp                       // for range n（反復変数なし）
 ```
 
 **設計上の決定：**
 - パース時の曖昧性を避けるため、個別の`Id`生成規則ではなく`IdentifierList`を使用
-- `strict`アノテーションにより、ループ開始前にrange式が評価されることを保証
+- `strict`アノテーションは不要（Contextルールが評価を制御）
 - 単一の生成規則で、単一の識別子と将来の複数識別子のケースの両方に対応
 
 ### 2. 意味規則（src/go/semantics/core.k）
@@ -327,14 +328,134 @@ for i := range 3 {
 
 ### ContextルールとStrictアノテーション
 
-**なぜ両方必要か？**
-- 構文上の`strict`アノテーション：意図を文書化し、基本的な評価を提供
-- Contextルール：ForStmt構文内の式に必要
-- K Frameworkの制限：`strict`は複雑な構文内に自動的に伝播しない
+#### strictアノテーションは不要
+
+実験の結果、**`strict`アノテーションは不要**であることが判明しました。Contextルールだけで十分に機能します。
+
+```k
+syntax RangeClause ::= IdentifierList ":=" "range" Exp  // strictなし
+syntax ForStmt ::= "for" RangeClause Block              // ネスト構造
+```
+
+理由：`RangeClause`は常に`ForStmt`の内部にネストされているため、`strict`アノテーションは自動的に伝播しません。代わりにContextルールが実際の評価を担当します。
+
+#### ネストした構文の問題
+
+**ネストした構文**とは、ある構文定義が別の構文定義の内部に含まれている状態です。
+
+```go
+for i := range n { print(i); }
+```
+
+この構文のパース木：
+
+```
+ForStmt（親）
+├── RangeClause（子 - これがネスト）
+│   ├── IdentifierList: (i , .IdentifierList)
+│   ├── ":="
+│   ├── "range"
+│   └── Exp: n ← これを評価したい
+└── Block: { print(i); }
+```
+
+`RangeClause`が`ForStmt`の**内部にネスト**されています。
+
+#### strictアノテーションの制限
+
+K Frameworkの`strict`は**直接的な子要素**にのみ適用されます：
+
+```
+ForStmt
+├── RangeClause ← ForStmtの直接の子
+│   └── Exp: n ← RangeClauseの子（ForStmtから見ると孫要素）
+└── Block
+```
+
+`ForStmt`から見ると、`Exp`は**孫要素**なので`strict`が自動的に伝播しません。
+
+#### 実験：Contextルールが必須
+
+**Contextルールなしの場合：**
+
+```k
+// strictアノテーションがあってもなくても結果は同じ
+syntax RangeClause ::= IdentifierList ":=" "range" Exp
+syntax ForStmt ::= "for" RangeClause Block
+// Contextルールなし
+```
+
+実行結果：
+```xml
+<k>
+  for i , .IdentifierList := range n { print ( i ) ; } ~> exitScope ~> .K
+</k>
+```
+
+`n`が評価されずに**そのまま残る**。❌
+
+**Contextルールありの場合：**
+
+```k
+// Contextルールが評価を担当
+context for ((_ , .IdentifierList) := range HOLE:Exp) _
+context for range HOLE:Exp _
+```
+
+実行結果：
+```xml
+<k> .K </k>
+<out> ListItem(0) ListItem(1) ListItem(2) </out>
+```
+
+`n`が正しく`3`に評価されてループが実行される。✅
+
+**結論：** `strict`アノテーションは無関係。Contextルールが評価を制御する。
+
+#### Contextルールの役割
+
+```k
+context for ((_ , .IdentifierList) := range HOLE:Exp) _
+```
+
+このルールは「`ForStmt`の中でも、range式の部分に計算の穴（HOLE）を作って評価せよ」と明示的に指示します。
+
+- `HOLE:Exp` - ここが評価対象（計算の穴）
+- `_` - Block部分（今は評価しない）
+
+#### 比較：ネストしていない場合
+
+```k
+syntax SimpleStmt ::= Id "=" Exp [strict(2)]
+```
+
+```
+SimpleStmt
+├── Id
+└── Exp ← 直接の子要素、strictが機能する✅
+```
+
+ネストしていない場合は`strict`だけで機能します。
+
+#### まとめ
+
+| 要素 | 役割 | 必要性 |
+|------|------|--------|
+| `strict`アノテーション | （ネストした構文では機能しない） | ❌ 不要 |
+| Contextルール | ネストした構造での評価を明示的に指示 | ✅ 必須 |
+
+**重要な発見：**
+- `strict`アノテーションはネストした構文では自動伝播しない
+- Contextルールが実際の評価を制御する
+- `strict`があってもなくても、Contextルールがなければ動作しない
+- `strict`なしでも、Contextルールがあれば正しく動作する
 
 **利点：**
 - 任意の式を許可：変数、関数呼び出し、算術演算
 - Go意味規則との一貫性：range式はループ前に一度評価される
+- K Frameworkの制限を回避：ネスト構造でも正しく動作
+
+詳細な説明は`ex/nested-syntax-explanation.md`を参照してください。
 
 ## 将来の拡張
 

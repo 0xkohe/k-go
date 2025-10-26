@@ -408,7 +408,8 @@ module GO
   // Go specification: "for" RangeClause Block - range loop (Go 1.22+)
   // Integer range: for i := range n iterates from 0 to n-1
 
-  // Context rule to evaluate the range expression
+  // Context rules are needed because strict annotation on RangeClause doesn't
+  // automatically propagate when RangeClause is nested inside ForStmt
   context for ((_ , .IdentifierList) := range HOLE:Exp) _
   context for range HOLE:Exp _
 
