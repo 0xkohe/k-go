@@ -1,0 +1,12 @@
+package main
+
+func main() {
+	const max = 100;
+	var x int;
+	x = 10;
+	x = x + max;
+	print(x);
+	if x < max {
+		print(max - x);
+	};
+}

@@ -1,0 +1,9 @@
+package main
+
+func main() {
+	const x = 10;
+	const y = 20;
+	print(x);
+	print(y);
+	print(x + y);
+}

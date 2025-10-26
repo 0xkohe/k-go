@@ -68,8 +68,19 @@ module GO-SYNTAX
   syntax IncDecStmt ::= Id "++" | Id "--"
 
   syntax Statement ::= SimpleStmt | Print | Block | IfStmt | ForStmt | BreakStmt | ContinueStmt
-                     | "var" Id Type "=" Exp  [strict(3)]
-                     | "var" Id Type
+                     | VarDecl
+                     | ConstDecl
+
+  // Go specification: var declaration
+  syntax VarDecl ::= "var" Id Type "=" Exp  [strict(3)]
+                   | "var" Id Type
+
+  // Go specification: const declaration
+  // ConstDecl = "const" ConstSpec
+  // ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ]
+  // Simplified for now: single identifier only
+  syntax ConstDecl ::= "const" Id "=" Exp     [strict(2)]  // const x = 10 (type inference)
+                     | "const" Id Type "=" Exp [strict(3)]  // const x int = 10 (explicit type)
 
   syntax Print ::= "print" "(" Exp ")" [strict]
 

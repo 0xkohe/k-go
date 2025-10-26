@@ -22,6 +22,7 @@ module GO
       <envStack> .List </envStack>  // Stack for block scoping
       <tenvStack> .List </tenvStack>
       <scopeDecls> .List </scopeDecls>
+      <constEnv> .Map </constEnv>  // Id -> ConstValue (compile-time constants)
       <fenv> .Map </fenv>  // Function definitions (name -> definition)
     </T>
 
@@ -86,6 +87,28 @@ module GO
        <nextLoc> L:Int => L +Int 1 </nextLoc>
        <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
 
+  // Go specification: Constant declarations
+  // Constants are compile-time values stored directly in constEnv
+  // They don't consume runtime memory (no env/store allocation)
+
+  // const x = value (type inference from value)
+  rule <k> const X:Id = I:Int => .K ... </k>
+       <tenv> R => R [ X <- int ] </tenv>
+       <constEnv> CE => CE [ X <- I ] </constEnv>
+
+  rule <k> const X:Id = B:Bool => .K ... </k>
+       <tenv> R => R [ X <- bool ] </tenv>
+       <constEnv> CE => CE [ X <- B ] </constEnv>
+
+  // const x Type = value (explicit type)
+  rule <k> const X:Id int = I:Int => .K ... </k>
+       <tenv> R => R [ X <- int ] </tenv>
+       <constEnv> CE => CE [ X <- I ] </constEnv>
+
+  rule <k> const X:Id bool = B:Bool => .K ... </k>
+       <tenv> R => R [ X <- bool ] </tenv>
+       <constEnv> CE => CE [ X <- B ] </constEnv>
+
   // Short variable declarations with store-based semantics
   rule <k> X:Id := I:Int => .K ... </k>
        <tenv> R => R [ X <- int ] </tenv>
@@ -138,21 +161,44 @@ module GO
        <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
     requires X in_keys(ScopeMap) andBool isKResult(V)
 
+  // Go specification: constants cannot be assigned
+  // Check if identifier is a constant after value evaluation
+  syntax KItem ::= "constAssignmentError"
+
+  rule <k> X:Id = I:Int => constAssignmentError ... </k>
+       <constEnv> ... X |-> _ ... </constEnv>
+    [priority(10)]
+
+  rule <k> X:Id = B:Bool => constAssignmentError ... </k>
+       <constEnv> ... X |-> _ ... </constEnv>
+    [priority(10)]
+
+  rule <k> X:Id = FV:FuncVal => constAssignmentError ... </k>
+       <constEnv> ... X |-> _ ... </constEnv>
+    [priority(10)]
+
   // Assignment with store-based semantics (update value at location)
+  // These rules only match if X is not in constEnv
   rule <k> X:Id = I:Int => .K ... </k>
        <tenv> ... X |-> int ... </tenv>
        <env> ... X |-> L:Int ... </env>
        <store> Store => Store [ L <- I ] </store>
+       <constEnv> CE </constEnv>
+    requires notBool (X in_keys(CE))
 
   rule <k> X:Id = B:Bool => .K ... </k>
        <tenv> ... X |-> bool ... </tenv>
        <env> ... X |-> L:Int ... </env>
        <store> Store => Store [ L <- B ] </store>
+       <constEnv> CE </constEnv>
+    requires notBool (X in_keys(CE))
 
   rule <k> X:Id = FV:FuncVal => .K ... </k>
        <tenv> ... X |-> _FT:FunctionType ... </tenv>
        <env> ... X |-> L:Int ... </env>
        <store> Store => Store [ L <- FV ] </store>
+       <constEnv> CE </constEnv>
+    requires notBool (X in_keys(CE))
 
   // Simplification: single-element IdentifierList/ExpressionList to Id/Exp
   // K's List macro can represent single elements as lists, need to simplify
@@ -316,10 +362,17 @@ module GO
 
   rule <k> shortDeclFromTuple(.IdentifierList, .List, _ScopeMap) => .K ... </k>
 
+  // Identifier lookup: check constants first, then variables
+  // Constants have priority (compile-time values)
+  rule <k> X:Id => V ... </k>
+       <constEnv> ... X |-> V ... </constEnv>
+    [priority(10)]
+
   // Variable lookup with store-based semantics
   rule <k> X:Id => V ... </k>
        <env> ... X |-> L:Int ... </env>
        <store> ... L |-> V ... </store>
+    [priority(20)]
 
   rule <k> I1:Int + I2:Int => I1 +Int I2 ... </k>
   rule <k> I1:Int - I2:Int => I1 -Int I2 ... </k>
