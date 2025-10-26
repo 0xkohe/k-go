@@ -206,13 +206,12 @@ The compiled artifacts in `-kompiled/` directories are generated and should not 
 - Increment/decrement: ++, --
 - Control flow: if/else, for loops (ForClause and RangeClause)
   - Integer range (Go 1.22+): `for i := range n`, `for range n`
-- Functions: declarations, calls, single return value or void
+- Functions: declarations, calls, multiple return values (tuples)
 - Block scoping with `scopeDecls` tracking for redeclaration checking
 - Break/continue statements
 - Print function (int only)
 
 **Not yet supported:**
-- Multiple return values
 - Struct types, arrays, slices, maps
 - Pointers
 - String type

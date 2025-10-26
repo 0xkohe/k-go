@@ -3,7 +3,7 @@ package main
 func pair() (int, int) {
     var a int = 1;
     var b int = 2;
-    return a, b;
+    return tuple(ListItem(a) ListItem(b));
 }
 
 func main() {
