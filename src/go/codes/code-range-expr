@@ -1,0 +1,9 @@
+package main
+
+func main() {
+	var n int;
+	n = 3;
+	for i := range n {
+		print(i);
+	};
+}

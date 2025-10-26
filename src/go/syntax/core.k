@@ -107,6 +107,7 @@ module GO-SYNTAX
   syntax ForStmt ::= "for" Block                      // infinite loop
                    | "for" Condition Block            // condition-only loop
                    | "for" ForClause Block            // for clause with init;condition;post
+                   | "for" RangeClause Block          // range clause (Go 1.22+)
 
   syntax Condition ::= Exp
 
@@ -124,4 +125,10 @@ module GO-SYNTAX
                      | ";" Exp ";"                        // ; condition;
                      | SimpleStmt ";" ";"                 // init; ;
                      | ";" ";"                            // ; ;
+
+  // Go specification: RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
+  // Current implementation: integer range only (Go 1.22+)
+  // Future: arrays, slices, maps, strings, channels
+  syntax RangeClause ::= IdentifierList ":=" "range" Exp [strict(2)]  // for i := range n (or i, v for collections)
+                       | "range" Exp                     [strict(1)]  // for range n (no iteration variable)
 endmodule

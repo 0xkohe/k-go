@@ -1,0 +1,10 @@
+package main
+
+func main() {
+	for i := range 10 {
+		if i == 3 {
+			break;
+		};
+		print(i);
+	};
+}

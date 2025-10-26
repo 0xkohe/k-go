@@ -405,6 +405,48 @@ module GO
 
   rule <k> breakSignal ~> loop(_E, _SP, _B) => .K ... </k>
 
+  // Go specification: "for" RangeClause Block - range loop (Go 1.22+)
+  // Integer range: for i := range n iterates from 0 to n-1
+
+  // Context rule to evaluate the range expression
+  context for ((_ , .IdentifierList) := range HOLE:Exp) _
+  context for range HOLE:Exp _
+
+  // Single identifier case - handle parsed form "X , .IdentifierList"
+  rule <k> for ((X:Id , .IdentifierList) := range N:Int) B:Block => enterScope(X := 0 ~> loop(X < N, X ++, B)) ... </k>
+    requires N >Int 0
+
+  rule <k> for ((_X:Id , .IdentifierList) := range N:Int) _B:Block => .K ... </k>
+    requires N <=Int 0
+
+  // Fallback for direct Id (if parsed that way)
+  rule <k> for (X:Id := range N:Int) B:Block => enterScope(X := 0 ~> loop(X < N, X ++, B)) ... </k>
+    requires N >Int 0
+
+  rule <k> for (_X:Id := range N:Int) _B:Block => .K ... </k>
+    requires N <=Int 0
+
+  // Range without iteration variable: for range n
+  // Go specification: executes the loop n times without exposing iteration variable
+  syntax KItem ::= rangeLoop(Int, Int, Block)  // rangeLoop(current, limit, body)
+
+  rule <k> for range N:Int B:Block => enterScope(rangeLoop(0, N, B)) ... </k>
+    requires N >Int 0
+
+  rule <k> for range N:Int _B:Block => .K ... </k>
+    requires N <=Int 0
+
+  rule <k> rangeLoop(I:Int, N:Int, B:Block) => B ~> rangeLoop(I +Int 1, N, B) ... </k>
+    requires I <Int N
+
+  rule <k> rangeLoop(I:Int, N:Int, _B:Block) => .K ... </k>
+    requires I >=Int N
+
+  // Handle break/continue in range loops
+  rule <k> breakSignal ~> rangeLoop(_I, _N, _B) => .K ... </k>
+
+  rule <k> continueSignal ~> rangeLoop(I, N, B) => rangeLoop(I +Int 1, N, B) ... </k>
+
   syntax Bool ::= isKResult(K) [symbol(isKResult), function]
   rule isKResult(_:Int)  => true
   rule isKResult(_:Bool) => true

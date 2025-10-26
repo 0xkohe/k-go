@@ -83,7 +83,7 @@ The main Go language implementation is modular:
   - Basic types (int, bool)
   - Variables and assignments
   - Expressions and operators (arithmetic, comparison, boolean)
-  - Control flow (if/else, for loops with ForClause)
+  - Control flow (if/else, for loops with ForClause and RangeClause)
   - Block scoping with environment stacks
   - Break/continue statements
   - Automatic semicolon insertion rules
@@ -126,7 +126,12 @@ Block scoping is implemented via:
 
 ### Control Flow
 
-- **For loops**: Desugared into internal `loop(condition, post, body)` construct with all 8 ForClause variants supported
+- **For loops**:
+  - **ForClause**: Desugared into internal `loop(condition, post, body)` construct with all 8 ForClause variants supported
+  - **RangeClause** (Go 1.22+): Integer range support (`for i := range n` iterates from 0 to n-1)
+    - `for i := range n` - single iteration variable
+    - `for range n` - no iteration variable (executes n times)
+    - Future: arrays, slices, maps, strings, channels
 - **Break/Continue**: Implemented as signals that bubble up to nearest loop boundary
 - **Return**: Implemented as `returnSignal(value)` that bubbles to `returnJoin(type)` boundary
 
@@ -137,7 +142,7 @@ Test programs are located under `src/go/codes/` (e.g., `codes/code`, `codes/code
 - Variable declarations and assignments
 - Arithmetic and boolean expressions
 - If statements with optional initialization
-- For loops with various clause combinations
+- For loops with ForClause and RangeClause (integer range)
 - Break/continue statements
 - Nested block scoping
 
@@ -172,9 +177,10 @@ The compiled artifacts in `-kompiled/` directories are generated and should not 
 - Comparison operators: <, >, ==
 - Boolean operators: &&, ||, !
 - Increment/decrement: ++, --
-- Control flow: if/else, for loops (ForClause only)
+- Control flow: if/else, for loops (ForClause and RangeClause)
+  - Integer range (Go 1.22+): `for i := range n`, `for range n`
 - Functions: declarations, calls, single return value or void
-- Block scoping
+- Block scoping with `scopeDecls` tracking
 - Break/continue statements
 - Print function (int only)
 
@@ -183,7 +189,7 @@ The compiled artifacts in `-kompiled/` directories are generated and should not 
 - Struct types, arrays, slices, maps
 - Pointers
 - String type
-- For-range loops
+- For-range over collections (arrays, slices, maps, strings, channels)
 - Switch statements
 - Goroutines and channels
 - Package system beyond single main package
