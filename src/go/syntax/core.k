@@ -85,11 +85,14 @@ module GO-SYNTAX
                | Exp "-" Exp [left, seqstrict]
                > non-assoc:
                  Exp "<"  Exp [seqstrict]
+               | Exp "<=" Exp [seqstrict]
                | Exp ">"  Exp [seqstrict]
+               | Exp ">=" Exp [seqstrict]
                | Exp "==" Exp [seqstrict]
+               | Exp "!=" Exp [seqstrict]
                > left:
-                 Exp "&&" Exp [left, seqstrict]
-               | Exp "||" Exp [left, seqstrict]
+                 Exp "&&" Exp [left]
+               | Exp "||" Exp [left]
 
   // Go specification: IfStmt = "if" [ SimpleStmt ";" ] Expression Block [ "else" ( IfStmt | Block ) ] .
   syntax IfStmt ::= "if" Exp Block                                   [strict(1)]

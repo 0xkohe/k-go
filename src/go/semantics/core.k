@@ -328,12 +328,23 @@ module GO
   rule <k> I1:Int % I2:Int => I1 %Int I2 ... </k>
 
   rule <k> I1:Int <  I2:Int => I1 <Int  I2 ... </k>
+  rule <k> I1:Int <= I2:Int => I1 <=Int I2 ... </k>
   rule <k> I1:Int >  I2:Int => I1 >Int  I2 ... </k>
+  rule <k> I1:Int >= I2:Int => I1 >=Int I2 ... </k>
   rule <k> I1:Int == I2:Int => I1 ==Int I2 ... </k>
+  rule <k> I1:Int != I2:Int => notBool (I1 ==Int I2) ... </k>
+
+  rule <k> B1:Bool == B2:Bool => B1 ==Bool B2 ... </k>
+  rule <k> B1:Bool != B2:Bool => notBool (B1 ==Bool B2) ... </k>
   rule <k> - I:Int => 0 -Int I ... </k>
 
-  rule <k> B1:Bool && B2:Bool => B1 andBool B2 ... </k>
-  rule <k> B1:Bool || B2:Bool => B1 orBool  B2 ... </k>
+  context HOLE && _E:Exp
+  rule <k> true && E:Exp => E ... </k>
+  rule <k> false && _E:Exp => false ... </k>
+
+  context HOLE || _E:Exp
+  rule <k> true || _E:Exp => true ... </k>
+  rule <k> false || E:Exp => E ... </k>
   rule <k> ! B:Bool           => notBool B    ... </k>
 
   rule <k> X:Id ++ => X = (X + 1) ... </k>

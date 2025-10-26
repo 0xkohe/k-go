@@ -1,0 +1,27 @@
+package main
+
+func main() {
+  if true == false { print(99); } else { print(0); };
+  if true != false { print(1); } else { print(2); };
+  if 5 <= 2 { print(3); } else { print(4); };
+  if 5 >= 5 { print(5); } else { print(6); };
+  if 7 != 7 { print(7); } else { print(8); };
+
+  var hits int = 0;
+  tick := func() bool {
+    hits = hits + 1;
+    return true;
+  };
+
+  if false && tick() { print(10); };
+  print(hits);
+
+  if true && tick() { print(11); };
+  print(hits);
+
+  if true || tick() { print(12); };
+  print(hits);
+
+  if false || tick() { print(13); };
+  print(hits);
+}
