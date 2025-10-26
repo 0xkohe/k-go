@@ -46,11 +46,11 @@ llvm-kompile /app/<definition>.k/<definition>-kompiled/definition.kore /app/<def
 ### Running Programs
 
 ```bash
-# Run a program file
-krun code.txt
+# Run a program file (files live under src/go/codes/)
+krun codes/code
 
 # Run with debugger
-krun code.txt --debugger
+krun codes/code --debugger
 
 # Run with specific program argument
 krun -cPGM=0 --debugger
@@ -65,7 +65,7 @@ After modifying K definitions, run the following commands from the project root 
 docker compose exec k bash -c "cd go && kompile main.k"
 
 # 2. Run test program to verify changes
-docker compose exec k bash -c "cd go && krun code --definition main-kompiled/"
+docker compose exec k bash -c "cd go && krun codes/code --definition main-kompiled/"
 ```
 
 These commands ensure that:
@@ -103,17 +103,19 @@ The K configuration uses multiple cells for state management:
 - `<k>`: Computation cell (program being executed)
 - `<out>`: Output accumulator (for print statements)
 - `<tenv>`: Type environment mapping identifiers to types
-- `<envI>`: Integer variable environment
-- `<envB>`: Boolean variable environment
-- `<tenvStack>`, `<envIStack>`, `<envBStack>`: Stack cells for block scoping
+- `<env>`: Environment mapping identifiers to locations (`Loc`)
+- `<store>`: Shared store mapping `Loc` to actual values (ints, bools, closures)
+- `<nextLoc>`: Counter for the next free location
+- `<envStack>`, `<tenvStack>`: Stack cells for block scoping
 - `<fenv>`: Function environment storing function definitions
 
 ### Type System
 
-The implementation uses a two-environment approach:
-- Type information stored in `<tenv>` determines which value environment to use
-- Values stored in separate `<envI>` (int) and `<envB>` (bool) environments
-- Lookups and assignments are guarded by type checks
+The implementation uses store-based semantics:
+- `<tenv>` tracks each identifier's declared type for static checks
+- `<env>` maps identifiers to `Loc` entries inside the shared `<store>`
+- `<store>` holds the actual runtime values (ints, bools, closures) keyed by `Loc`
+- `<nextLoc>` allocates fresh locations for declarations and short declarations
 
 ### Scoping Mechanism
 
@@ -130,7 +132,7 @@ Block scoping is implemented via:
 
 ### Example Programs
 
-Test programs are located in files named `code` (e.g., `src/go/code`). These demonstrate:
+Test programs are located under `src/go/codes/` (e.g., `codes/code`, `codes/code-s`). These demonstrate:
 - Function declarations and calls
 - Variable declarations and assignments
 - Arithmetic and boolean expressions
@@ -156,7 +158,7 @@ Each example directory contains:
 When modifying `.k` files:
 1. Edit the definition file
 2. Run `kompile` to compile it
-3. Test changes with `krun code`
+3. Test changes with `krun codes/code`
 4. Use `--debugger` flag for step-through debugging
 
 The compiled artifacts in `-kompiled/` directories are generated and should not be manually edited.

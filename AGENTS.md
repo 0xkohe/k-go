@@ -5,7 +5,7 @@
 - Source is mounted into containers from `src/`.
 - Go semantics (K) live in `src/go/`:
   - Entry modules: `src/go/main.k` (imports `go.k`, `func.k`).
-  - Example programs: `src/go/code`, `src/go/code-s`.
+  - Example programs: `src/go/codes/` (e.g., `codes/code`, `codes/code-s`).
 - Other examples/experiments in `src/other/` (e.g., Peano, Turing machine).
 
 ## Reference Documentation
@@ -20,8 +20,8 @@
   - `cd /app/go && kompile main.k --backend llvm`
   - Produces `main-kompiled/` (clean with `rm -rf main-kompiled`).
 - Run sample program (inside ` /app/go`):
-  - `krun code` or `krun code-s`
-  - Debug: `krun code --debugger`
+  - `krun codes/code` or `krun codes/code-s`
+  - Debug: `krun codes/code --debugger`
 
 ### Testing After Changes
 After modifying K definitions, run the following commands from the project root:
@@ -30,7 +30,7 @@ After modifying K definitions, run the following commands from the project root:
 docker compose exec k bash -c "cd go && kompile main.k"
 
 # 2. Run test program to verify changes
-docker compose exec k bash -c "cd go && krun code --definition main-kompiled/"
+docker compose exec k bash -c "cd go && krun codes/code --definition main-kompiled/"
 ```
 
 ## Coding Style & Naming Conventions
@@ -41,17 +41,16 @@ docker compose exec k bash -c "cd go && krun code --definition main-kompiled/"
 - Comments: `// inline` or `/* block */` with concise rationale.
 
 ## Testing Guidelines
-- Use runnable examples under `src/go/` as smoke tests via `krun`.
-- Add new minimal programs next to `src/go/code*` to cover new features.
+- Use runnable examples under `src/go/codes/` as smoke tests via `krun`.
+- Add new minimal programs under `src/go/codes/` to cover new features.
 - For semantic properties, prefer K proofs (`kprove`) when adding formal specs; place specs alongside modules and document how to run them.
 
 ## Commit & Pull Request Guidelines
 - Commit messages: short imperative summary (≤72 chars); include context in body.
 - Conventional prefixes encouraged: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`.
-- PRs must include: purpose, high-level changes, how to build/run, and sample inputs/outputs (e.g., `krun code`). Attach screenshots or logs when helpful.
+- PRs must include: purpose, high-level changes, how to build/run, and sample inputs/outputs (e.g., `krun codes/code`). Attach screenshots or logs when helpful.
 
 ## Security & Environment
 - Development runs inside `runtimeverificationinc/kframework-k` via Docker; container mounts `src` to `/app` and enables `gdb` for LLVM debugging.
 - Avoid committing compiled directories (`*-kompiled/`) or local editor artifacts.
 - Pin any external tool versions in Dockerfile; discuss image bumps in PRs.
-
