@@ -1,0 +1,27 @@
+package main
+
+func main() {
+  var x int;
+  var flag bool;
+  var cb func() int;
+
+  print(x);
+  if !flag { print(1); };
+
+  cb = func() int {
+    return x + 5;
+  };
+  print(cb());
+
+  x = 7;
+  {
+    x := x + 1;
+    print(x);
+  };
+  print(x);
+
+  value := 1;
+  value, next := value + 1, value + 2;
+  print(value);
+  print(next);
+}

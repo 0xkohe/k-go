@@ -1,0 +1,10 @@
+package main
+
+func main() {
+	const x int = 100;
+	const y bool = true;
+	print(x);
+	if y {
+		print(x + 50);
+	};
+}

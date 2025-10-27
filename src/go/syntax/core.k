@@ -68,7 +68,19 @@ module GO-SYNTAX
   syntax IncDecStmt ::= Id "++" | Id "--"
 
   syntax Statement ::= SimpleStmt | Print | Block | IfStmt | ForStmt | BreakStmt | ContinueStmt
-                     | "var" Id Type "=" Exp  [strict(3)]
+                     | VarDecl
+                     | ConstDecl
+
+  // Go specification: var declaration
+  syntax VarDecl ::= "var" Id Type "=" Exp  [strict(3)]
+                   | "var" Id Type
+
+  // Go specification: const declaration
+  // ConstDecl = "const" ConstSpec
+  // ConstSpec = IdentifierList [ [ Type ] "=" ExpressionList ]
+  // Simplified for now: single identifier only
+  syntax ConstDecl ::= "const" Id "=" Exp     [strict(2)]  // const x = 10 (type inference)
+                     | "const" Id Type "=" Exp [strict(3)]  // const x int = 10 (explicit type)
 
   syntax Print ::= "print" "(" Exp ")" [strict]
 
@@ -84,11 +96,14 @@ module GO-SYNTAX
                | Exp "-" Exp [left, seqstrict]
                > non-assoc:
                  Exp "<"  Exp [seqstrict]
+               | Exp "<=" Exp [seqstrict]
                | Exp ">"  Exp [seqstrict]
+               | Exp ">=" Exp [seqstrict]
                | Exp "==" Exp [seqstrict]
+               | Exp "!=" Exp [seqstrict]
                > left:
-                 Exp "&&" Exp [left, seqstrict]
-               | Exp "||" Exp [left, seqstrict]
+                 Exp "&&" Exp [left]
+               | Exp "||" Exp [left]
 
   // Go specification: IfStmt = "if" [ SimpleStmt ";" ] Expression Block [ "else" ( IfStmt | Block ) ] .
   syntax IfStmt ::= "if" Exp Block                                   [strict(1)]
@@ -103,6 +118,7 @@ module GO-SYNTAX
   syntax ForStmt ::= "for" Block                      // infinite loop
                    | "for" Condition Block            // condition-only loop
                    | "for" ForClause Block            // for clause with init;condition;post
+                   | "for" RangeClause Block          // range clause (Go 1.22+)
 
   syntax Condition ::= Exp
 
@@ -120,4 +136,11 @@ module GO-SYNTAX
                      | ";" Exp ";"                        // ; condition;
                      | SimpleStmt ";" ";"                 // init; ;
                      | ";" ";"                            // ; ;
+
+  // Go specification: RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
+  // Current implementation: integer range only (Go 1.22+)
+  // Future: arrays, slices, maps, strings, channels
+  // Note: strict annotations are not needed because context rules handle evaluation
+  syntax RangeClause ::= IdentifierList ":=" "range" Exp  // for i := range n (or i, v for collections)
+                       | "range" Exp                       // for range n (no iteration variable)
 endmodule
