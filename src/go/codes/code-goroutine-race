@@ -1,0 +1,12 @@
+package main
+
+func worker(id int) {
+	print(id);
+}
+
+func main() {
+	go worker(1);
+	go worker(2);
+	go worker(3);
+	print(0);
+}
