@@ -16,7 +16,7 @@ module GO
   configuration
     <T>
       <threads>
-        <thread multiplicity="*" type="Set">
+        <thread multiplicity="*" type="Set" initial="">
           <tid> 0 </tid>
           <k> $PGM:Program </k>
           <tenv> .Map </tenv>
@@ -175,15 +175,15 @@ module GO
   // Check if identifier is a constant after value evaluation
   syntax KItem ::= "constAssignmentError"
 
-  rule <k> X:Id = I:Int => constAssignmentError ... </k>
+  rule <k> X:Id = _I:Int => constAssignmentError ... </k>
        <constEnv> ... X |-> _ ... </constEnv>
     [priority(10)]
 
-  rule <k> X:Id = B:Bool => constAssignmentError ... </k>
+  rule <k> X:Id = _B:Bool => constAssignmentError ... </k>
        <constEnv> ... X |-> _ ... </constEnv>
     [priority(10)]
 
-  rule <k> X:Id = FV:FuncVal => constAssignmentError ... </k>
+  rule <k> X:Id = _FV:FuncVal => constAssignmentError ... </k>
        <constEnv> ... X |-> _ ... </constEnv>
     [priority(10)]
 
