@@ -94,93 +94,153 @@ module GO-CONCURRENT
     requires notBool (X in_keys(CE))
 
   // Go specification: Making channels
-  // make(chan T) creates an unbuffered channel
-
+  // make(chan T) creates an unbuffered channel (bufferSize = 0)
   rule <k> make(chan T:Type) => channel(N, T) ... </k>
        <nextChanId> N:Int => N +Int 1 </nextChanId>
-       <channels> Chans => Chans [ N <- chanState(.List, .List, T) ] </channels>
+       <channels> Chans => Chans [ N <- chanState(.List, .List, .List, 0, T) ] </channels>
 
-  // Channel state: chanState(sendQueue, recvQueue, elementType)
-  // sendQueue: List of (tid, value) pairs waiting to send
+  // make(chan T, size) creates a buffered channel with given buffer size
+  rule <k> make(chan T:Type, Size:Int) => channel(N, T) ... </k>
+       <nextChanId> N:Int => N +Int 1 </nextChanId>
+       <channels> Chans => Chans [ N <- chanState(.List, .List, .List, Size, T) ] </channels>
+    requires Size >=Int 0
+
+  // Channel state: chanState(sendQueue, recvQueue, buffer, bufferSize, elementType)
+  // sendQueue: List of sendItem(tid, value) pairs waiting to send
   // recvQueue: List of tid waiting to receive
-  syntax ChanState ::= chanState(List, List, Type)
+  // buffer: List of values in the buffer (for buffered channels)
+  // bufferSize: Maximum buffer capacity (0 for unbuffered channels)
+  // elementType: Type of channel elements
+  syntax ChanState ::= chanState(List, List, List, Int, Type)
 
   // Go specification: Send statement
   // Channel <- Expression sends value to channel
 
-  // Send operation: if there's a waiting receiver, deliver immediately (int)
+  // Send operation for int channels
+  // Priority 1: If there's a waiting receiver, deliver immediately
   rule <thread>...
          <tid> _Tid </tid>
          <k> chanSend(channel(CId, int), V:Int) => .K ... </k>
        ...</thread>
        <channels>...
-         CId |-> (chanState(SendQ, (ListItem(RecvTid:Int) RecvRest:List), int)
-              => chanState(SendQ, RecvRest, int))
+         CId |-> (chanState(SendQ, (ListItem(RecvTid:Int) RecvRest:List), Buf, Size, int)
+              => chanState(SendQ, RecvRest, Buf, Size, int))
        ...</channels>
        <thread>...
          <tid> RecvTid </tid>
          <k> waitingRecv(CId) => V ... </k>
        ...</thread>
 
-  // Send operation: if there's a waiting receiver, deliver immediately (bool)
+  // Priority 2: If buffer has space, add to buffer (non-blocking)
   rule <thread>...
          <tid> _Tid </tid>
-         <k> chanSend(channel(CId, bool), V:Bool) => .K ... </k>
+         <k> chanSend(channel(CId, int), V:Int) => .K ... </k>
        ...</thread>
        <channels>...
-         CId |-> (chanState(SendQ, (ListItem(RecvTid:Int) RecvRest:List), bool)
-              => chanState(SendQ, RecvRest, bool))
+         CId |-> (chanState(SendQ, .List, Buf, Size, int)
+              => chanState(SendQ, .List, Buf ListItem(V), Size, int))
        ...</channels>
-       <thread>...
-         <tid> RecvTid </tid>
-         <k> waitingRecv(CId) => V ... </k>
-       ...</thread>
+    requires size(Buf) <Int Size
 
-  // Send operation: if no receiver, block (add to send queue) (int)
+  // Priority 3: If buffer is full, block (add to send queue)
   rule <thread>...
          <tid> Tid </tid>
          <k> chanSend(channel(CId, int), V:Int) => waitingSend(CId, V) ... </k>
        ...</thread>
        <channels>...
-         CId |-> (chanState(SendQ, .List, int)
-              => chanState(SendQ ListItem(sendItem(Tid, V)), .List, int))
+         CId |-> (chanState(SendQ, .List, Buf, Size, int)
+              => chanState(SendQ ListItem(sendItem(Tid, V)), .List, Buf, Size, int))
        ...</channels>
+    requires size(Buf) >=Int Size
 
-  // Send operation: if no receiver, block (add to send queue) (bool)
+  // Send operation for bool channels
+  // Priority 1: If there's a waiting receiver, deliver immediately
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> chanSend(channel(CId, bool), V:Bool) => .K ... </k>
+       ...</thread>
+       <channels>...
+         CId |-> (chanState(SendQ, (ListItem(RecvTid:Int) RecvRest:List), Buf, Size, bool)
+              => chanState(SendQ, RecvRest, Buf, Size, bool))
+       ...</channels>
+       <thread>...
+         <tid> RecvTid </tid>
+         <k> waitingRecv(CId) => V ... </k>
+       ...</thread>
+
+  // Priority 2: If buffer has space, add to buffer (non-blocking)
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> chanSend(channel(CId, bool), V:Bool) => .K ... </k>
+       ...</thread>
+       <channels>...
+         CId |-> (chanState(SendQ, .List, Buf, Size, bool)
+              => chanState(SendQ, .List, Buf ListItem(V), Size, bool))
+       ...</channels>
+    requires size(Buf) <Int Size
+
+  // Priority 3: If buffer is full, block (add to send queue)
   rule <thread>...
          <tid> Tid </tid>
          <k> chanSend(channel(CId, bool), V:Bool) => waitingSend(CId, V) ... </k>
        ...</thread>
        <channels>...
-         CId |-> (chanState(SendQ, .List, bool)
-              => chanState(SendQ ListItem(sendItem(Tid, V)), .List, bool))
+         CId |-> (chanState(SendQ, .List, Buf, Size, bool)
+              => chanState(SendQ ListItem(sendItem(Tid, V)), .List, Buf, Size, bool))
        ...</channels>
+    requires size(Buf) >=Int Size
 
   // Go specification: Receive operator
   // <-Channel receives value from channel
 
-  // Receive operation: if there's a waiting sender, receive immediately
+  // Receive operation
+  // Priority 1: If buffer has values, take from buffer (and refill from send queue if any)
   rule <thread>...
          <tid> _Tid </tid>
          <k> chanRecv(channel(CId, _T)) => V ... </k>
        ...</thread>
        <channels>...
-         CId |-> (chanState((ListItem(sendItem(SendTid:Int, V)) SendRest:List), RecvQ, T)
-              => chanState(SendRest, RecvQ, T))
+         CId |-> (chanState((ListItem(sendItem(SendTid:Int, SV)) SendRest:List), RecvQ,
+                           (ListItem(V) BufRest:List), Size, T)
+              => chanState(SendRest, RecvQ, BufRest ListItem(SV), Size, T))
        ...</channels>
        <thread>...
          <tid> SendTid </tid>
          <k> waitingSend(CId, _) => .K ... </k>
        ...</thread>
 
-  // Receive operation: if no sender, block (add to recv queue)
+  // Priority 2: If buffer has values but no waiting sender, just take from buffer
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> chanRecv(channel(CId, _T)) => V ... </k>
+       ...</thread>
+       <channels>...
+         CId |-> (chanState(SendQ, RecvQ, (ListItem(V) BufRest:List), Size, T)
+              => chanState(SendQ, RecvQ, BufRest, Size, T))
+       ...</channels>
+
+  // Priority 3: If waiting sender exists and buffer is empty, receive directly
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> chanRecv(channel(CId, _T)) => V ... </k>
+       ...</thread>
+       <channels>...
+         CId |-> (chanState((ListItem(sendItem(SendTid:Int, V)) SendRest:List), RecvQ, .List, Size, T)
+              => chanState(SendRest, RecvQ, .List, Size, T))
+       ...</channels>
+       <thread>...
+         <tid> SendTid </tid>
+         <k> waitingSend(CId, _) => .K ... </k>
+       ...</thread>
+
+  // Priority 4: Nothing available, block (add to recv queue)
   rule <thread>...
          <tid> Tid </tid>
          <k> chanRecv(channel(CId, _T)) => waitingRecv(CId) ... </k>
        ...</thread>
        <channels>...
-         CId |-> (chanState(.List, RecvQ, T)
-              => chanState(.List, RecvQ ListItem(Tid), T))
+         CId |-> (chanState(.List, RecvQ, .List, Size, T)
+              => chanState(.List, RecvQ ListItem(Tid), .List, Size, T))
        ...</channels>
 
   // Internal: waiting states for blocked threads
