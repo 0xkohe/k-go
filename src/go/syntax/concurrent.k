@@ -27,6 +27,13 @@ module GO-SYNTAX-CONCURRENT
   syntax Exp ::= "make" "(" ChannelType ")"
 
   // Go specification: SendStmt = Channel "<-" Expression .
+  // Go specification: Channel  = Expression .
+  // Note: We use Exp directly instead of defining a Channel alias, as it would add no semantic value.
+  //
+  // Type constraints (enforced in semantics, not syntax):
+  // - The channel expression must be of channel type
+  // - The channel direction must permit send operations
+  // - The type of the value to be sent must be assignable to the channel's element type
   syntax SendStmt ::= Exp "<-" Exp [strict, symbol(chanSend)]
 
   syntax Statement ::= SendStmt

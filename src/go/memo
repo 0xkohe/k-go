@@ -1,4 +1,4 @@
 krun code --definition main-kompiled/
-kompile main.k  && krun code --definition main-kompiled/
+kompile main.k  && krun codes/code --definition main-kompiled/
 
 
