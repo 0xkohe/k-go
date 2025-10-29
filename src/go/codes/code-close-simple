@@ -1,0 +1,21 @@
+package main
+
+func main() {
+  ch := make(chan int, 3);
+  ch <- 1;
+  ch <- 2;
+  ch <- 3;
+  close(ch);
+
+  v1 := <-ch;
+  print(v1);
+
+  v2 := <-ch;
+  print(v2);
+
+  v3 := <-ch;
+  print(v3);
+
+  v4 := <-ch;
+  print(v4);
+}

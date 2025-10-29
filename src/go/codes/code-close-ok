@@ -1,0 +1,32 @@
+package main
+
+func main() {
+  ch := make(chan int, 2);
+  ch <- 10;
+  ch <- 20;
+  close(ch);
+
+  v1, ok1 := <-ch;
+  print(v1);
+  if ok1 {
+    print(1);
+  } else {
+    print(0);
+  };
+
+  v2, ok2 := <-ch;
+  print(v2);
+  if ok2 {
+    print(1);
+  } else {
+    print(0);
+  };
+
+  v3, ok3 := <-ch;
+  print(v3);
+  if ok3 {
+    print(1);
+  } else {
+    print(0);
+  };
+}
