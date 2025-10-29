@@ -12,5 +12,6 @@ module MAIN
   imports MAIN-SYNTAX
   imports GO
   imports GO-FUNC
+  imports GO-CONTROL-FLOW
   imports GO-CONCURRENT
 endmodule
