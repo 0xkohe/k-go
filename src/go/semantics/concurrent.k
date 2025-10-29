@@ -40,6 +40,7 @@ module GO-CONCURRENT
          <k> go FCall:Exp => .K ... </k>
          <tenv> TEnv </tenv>
          <env> Env </env>
+         <constEnv> CEnv </constEnv>
        ...</thread>
        (.Bag =>
          <thread>...
@@ -49,6 +50,8 @@ module GO-CONCURRENT
            <env> Env </env>
            <envStack> .List </envStack>
            <tenvStack> .List </tenvStack>
+           <constEnv> CEnv </constEnv>
+           <constEnvStack> .List </constEnvStack>
            <scopeDecls> .List </scopeDecls>
          ...</thread>)
        <nextTid> N:Int => N +Int 1 </nextTid>

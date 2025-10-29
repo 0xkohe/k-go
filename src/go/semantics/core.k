@@ -23,6 +23,8 @@ module GO
           <env> .Map </env>  // Id -> Location (unified environment for all types)
           <envStack> .List </envStack>  // Stack for block scoping
           <tenvStack> .List </tenvStack>
+          <constEnv> .Map </constEnv>  // Id -> ConstValue (compile-time constants)
+          <constEnvStack> .List </constEnvStack>  // Stack for constant block scoping
           <scopeDecls> .List </scopeDecls>
         </thread>
       </threads>
@@ -30,7 +32,6 @@ module GO
       <out> .List </out>
       <store> .Map </store>  // Location -> Value (all values stored here)
       <nextLoc> 0 </nextLoc>  // Next available location
-      <constEnv> .Map </constEnv>  // Id -> ConstValue (compile-time constants)
       <fenv> .Map </fenv>  // Function definitions (name -> definition)
       <channels> .Map </channels>  // Channel ID -> Channel state
       <nextChanId> 0 </nextChanId>
@@ -57,14 +58,18 @@ module GO
        <env> E </env>
        <tenvStack> TS => TS ListItem(T) </tenvStack>
        <envStack> ES => ES ListItem(E) </envStack>
+       <constEnv> CE </constEnv>
+       <constEnvStack> CS => CS ListItem(CE) </constEnvStack>
        <scopeDecls> SD => SD ListItem(.Map) </scopeDecls>
 
   rule <k> exitScope => .K ... </k>
        <tenvStack> (TS ListItem(T)) => TS </tenvStack>
        <envStack> (ES ListItem(E)) => ES </envStack>
-       <scopeDecls> (SD ListItem(_)) => SD </scopeDecls>
        <tenv> _ => T </tenv>
        <env> _ => E </env>
+       <constEnvStack> (CS ListItem(CE)) => CS </constEnvStack>
+       <constEnv> _ => CE </constEnv>
+       <scopeDecls> (SD ListItem(_)) => SD </scopeDecls>
 
   rule <k> print(I:Int) => .K ... </k>
        <out> OL => OL ListItem(I) </out>
