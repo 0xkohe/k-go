@@ -1,42 +1,42 @@
 package main
 
 func producer(ch chan int) {
-  ch <- 1
-  ch <- 2
-  ch <- 3
-  close(ch)
-}
+  ch <- 1;
+  ch <- 2;
+  ch <- 3;
+  close(ch);
+};
 
 func consumer(ch chan int) {
   for v := range ch {
-    print(v)
-  }
-  print(999)
-}
+    print(v);
+  };
+  print(999);
+};
 
 func testOk(ch chan int) {
-  v, ok := <-ch
+  v, ok := <-ch;
   if ok {
-    print(v)
-    print(100)
-  }
-  v2, ok2 := <-ch
+    print(v);
+    print(100);
+  };
+  v2, ok2 := <-ch;
   if ok2 {
-    print(v2)
-    print(200)
+    print(v2);
+    print(200);
   } else {
-    print(0)
-    print(300)
-  }
+    print(0);
+    print(300);
+  };
 }
 
 func main() {
-  ch := make(chan int, 3)
-  go producer(ch)
-  go consumer(ch)
+  ch := make(chan int, 3);
+  go producer(ch);
+  go consumer(ch);
 
-  ch2 := make(chan int)
-  ch2 <- 42
-  close(ch2)
-  go testOk(ch2)
+  ch2 := make(chan int);
+  ch2 <- 42;
+  close(ch2);
+  go testOk(ch2);
 }
