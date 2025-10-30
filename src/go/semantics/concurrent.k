@@ -78,6 +78,12 @@ module GO-CONCURRENT
        <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
 
   // Go specification: Short variable declaration for channels
+  // Error rule: check for redeclaration first (higher priority)
+  rule <k> X:Id := _CV:ChanVal => shortDeclError ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
+    requires X in_keys(ScopeMap)
+    [priority(10)]
+
   // Infer type from channel value
   rule <k> X:Id := channel(CId:Int, T:Type) => .K ... </k>
        <tenv> R => R [ X <- chan T ] </tenv>

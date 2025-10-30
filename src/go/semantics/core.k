@@ -172,9 +172,22 @@ module GO
 
   syntax KItem ::= "shortDeclError"
 
-  rule <k> X:Id := V => shortDeclError ... </k>
+  // Error rules for short declaration of already declared variable
+  // These have higher priority to be checked before normal declaration rules
+  rule <k> X:Id := _I:Int => shortDeclError ... </k>
        <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
-    requires X in_keys(ScopeMap) andBool isKResult(V)
+    requires X in_keys(ScopeMap)
+    [priority(10)]
+
+  rule <k> X:Id := _B:Bool => shortDeclError ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
+    requires X in_keys(ScopeMap)
+    [priority(10)]
+
+  rule <k> X:Id := _FV:FuncVal => shortDeclError ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
+    requires X in_keys(ScopeMap)
+    [priority(10)]
 
   // Go specification: constants cannot be assigned
   // Check if identifier is a constant after value evaluation
