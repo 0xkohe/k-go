@@ -52,8 +52,20 @@ module GO-SYNTAX-CONCURRENT
   // Go specification: Multi-valued receive (v, ok := <-ch)
   // ok is false if channel is closed, true otherwise
   // This is handled specially in short declaration syntax
-  syntax Exp ::= recvWithOk(Exp) [strict(1)]
+  syntax Exp ::= recvWithOk(Exp)
 
-  // Special syntax for two-variable channel receive
-  syntax ShortVarDecl ::= Id "," Id ":=" "<-" Exp [strict(2)]
+  // Special syntax for two-variable channel receive in different contexts
+  // Short variable declaration: v, ok := <-ch
+  // Note: The Exp (channel) must be evaluated first, so we remove strict
+  // and handle evaluation in semantics
+  syntax ShortVarDecl ::= Id "," Id ":=" "<-" Exp
+
+  // Assignment: x, ok = <-ch
+  syntax Assignment ::= Id "," Id "=" "<-" Exp
+  syntax Statement ::= Assignment
+
+  // Variable declaration: var x, ok = <-ch
+  syntax VarSpec ::= "var" Id "," Id "=" "<-" Exp
+  syntax TopDecl ::= VarSpec
+  syntax Statement ::= VarSpec
 endmodule

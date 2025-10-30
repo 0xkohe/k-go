@@ -129,7 +129,7 @@ module GO-CONCURRENT
          CId |-> chanState(_SendQ, _RecvQ, _Buf, _Size, int, true)
        ...</channels>
 
-  // Priority 1: If there's a waiting receiver, deliver immediately
+  // Priority 1a: If there's a normal waiting receiver, deliver immediately
   rule <thread>...
          <tid> _Tid </tid>
          <k> chanSend(channel(CId, int), V:Int) => .K ... </k>
@@ -141,6 +141,20 @@ module GO-CONCURRENT
        <thread>...
          <tid> RecvTid </tid>
          <k> waitingRecv(CId) => V ... </k>
+       ...</thread>
+
+  // Priority 1b: If there's a waiting receiver with ok flag, deliver tuple(value, true)
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> chanSend(channel(CId, int), V:Int) => .K ... </k>
+       ...</thread>
+       <channels>...
+         CId |-> (chanState(SendQ, (ListItem(recvOkItem(RecvTid:Int)) RecvRest:List), Buf, Size, int, false)
+              => chanState(SendQ, RecvRest, Buf, Size, int, false))
+       ...</channels>
+       <thread>...
+         <tid> RecvTid </tid>
+         <k> waitingRecvOk(CId) => tuple(ListItem(V) ListItem(true)) ... </k>
        ...</thread>
 
   // Priority 2: If buffer has space, add to buffer (non-blocking)
@@ -175,7 +189,7 @@ module GO-CONCURRENT
          CId |-> chanState(_SendQ, _RecvQ, _Buf, _Size, bool, true)
        ...</channels>
 
-  // Priority 1: If there's a waiting receiver, deliver immediately
+  // Priority 1a: If there's a normal waiting receiver, deliver immediately
   rule <thread>...
          <tid> _Tid </tid>
          <k> chanSend(channel(CId, bool), V:Bool) => .K ... </k>
@@ -187,6 +201,20 @@ module GO-CONCURRENT
        <thread>...
          <tid> RecvTid </tid>
          <k> waitingRecv(CId) => V ... </k>
+       ...</thread>
+
+  // Priority 1b: If there's a waiting receiver with ok flag, deliver tuple(value, true)
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> chanSend(channel(CId, bool), V:Bool) => .K ... </k>
+       ...</thread>
+       <channels>...
+         CId |-> (chanState(SendQ, (ListItem(recvOkItem(RecvTid:Int)) RecvRest:List), Buf, Size, bool, false)
+              => chanState(SendQ, RecvRest, Buf, Size, bool, false))
+       ...</channels>
+       <thread>...
+         <tid> RecvTid </tid>
+         <k> waitingRecvOk(CId) => tuple(ListItem(V) ListItem(true)) ... </k>
        ...</thread>
 
   // Priority 2: If buffer has space, add to buffer (non-blocking)
@@ -316,6 +344,7 @@ module GO-CONCURRENT
 
   rule <k> wakeReceivers(.List, _CId, _ZeroVal) => .K ... </k>
 
+  // Wake normal receiver with zero value
   rule <k> wakeReceivers((ListItem(RecvTid:Int) Rest:List), CId, ZeroVal)
         => wakeReceivers(Rest, CId, ZeroVal) ... </k>
        <thread>...
@@ -323,55 +352,135 @@ module GO-CONCURRENT
          <k> waitingRecv(CId) => ZeroVal ... </k>
        ...</thread>
 
+  // Wake receiver with ok flag: return tuple(zeroValue, false)
+  rule <k> wakeReceivers((ListItem(recvOkItem(RecvTid:Int)) Rest:List), CId, ZeroVal)
+        => wakeReceivers(Rest, CId, ZeroVal) ... </k>
+       <thread>...
+         <tid> RecvTid </tid>
+         <k> waitingRecvOk(CId) => tuple(ListItem(ZeroVal) ListItem(false)) ... </k>
+       ...</thread>
+
   // Go specification: Receive with ok value (v, ok := <-ch)
   // Returns (value, true) for successful receive
   // Returns (zeroValue, false) for closed channel
 
-  // Transform multi-value receive in short declaration context
-  // When user writes: v, ok := <-ch
-  // This uses the special syntax rule and transforms to recvWithOk
+  // Helper: generate zero value for a type
+  syntax K ::= zeroValueForType(Type) [function]
+  rule zeroValueForType(int) => 0
+  rule zeroValueForType(bool) => false
+  rule zeroValueForType(chan _T:Type) => nil
 
-  // Handle two-variable receive: v, ok := <-ch
+  // Transform multi-value receive in different contexts
+  // Context rules to evaluate channel expression first
+  context _:Id, _:Id := <-HOLE:Exp
+  context _:Id, _:Id = <-HOLE:Exp
+  context var _:Id, _:Id = <-HOLE:Exp
+
+  // Short variable declaration: v, ok := <-ch
   rule <k> X:Id, Y:Id := <-Ch:ChanVal
         => (X, Y) := recvWithOk(Ch) ... </k>
 
-  // recvWithOk for int channels - successful receive
-  rule <thread>...
-         <tid> _Tid </tid>
-         <k> recvWithOk(channel(CId, int)) => tuple(ListItem(V) ListItem(true)) ... </k>
-       ...</thread>
-       <channels>...
-         CId |-> (chanState(SendQ, RecvQ, (ListItem(V) BufRest:List), Size, int, Closed)
-              => chanState(SendQ, RecvQ, BufRest, Size, int, Closed))
-       ...</channels>
+  rule <k> X:Id, Y:Id := <-Ch:FuncVal
+        => (X, Y) := recvWithOk(Ch) ... </k>
 
-  // recvWithOk for int channels - closed channel
-  rule <thread>...
-         <tid> _Tid </tid>
-         <k> recvWithOk(channel(CIdOk, int)) => tuple(ListItem(0) ListItem(false)) ... </k>
-       ...</thread>
-       <channels>...
-         CIdOk |-> chanState(.List, _RecvQ, .List, _Size, int, true)
-       ...</channels>
+  // Assignment: x, ok = <-ch
+  rule <k> X:Id, Y:Id = <-Ch:ChanVal
+        => (X, Y) = recvWithOk(Ch) ... </k>
 
-  // recvWithOk for bool channels - successful receive
-  rule <thread>...
-         <tid> _Tid </tid>
-         <k> recvWithOk(channel(CId, bool)) => tuple(ListItem(V) ListItem(true)) ... </k>
-       ...</thread>
-       <channels>...
-         CId |-> (chanState(SendQ, RecvQ, (ListItem(V) BufRest:List), Size, bool, Closed)
-              => chanState(SendQ, RecvQ, BufRest, Size, bool, Closed))
-       ...</channels>
+  rule <k> X:Id, Y:Id = <-Ch:FuncVal
+        => (X, Y) = recvWithOk(Ch) ... </k>
 
-  // recvWithOk for bool channels - closed channel
+  // Variable declaration: var x, ok = <-ch
+  // Transform to short declaration (simpler implementation)
+  rule <k> var X:Id, Y:Id = <-Ch:ChanVal
+        => (X, Y) := recvWithOk(Ch) ... </k>
+
+  rule <k> var X:Id, Y:Id = <-Ch:FuncVal
+        => (X, Y) := recvWithOk(Ch) ... </k>
+
+  // recvWithOk implementation with proper priority order
+  // Go spec: receive blocks until value is available or channel is closed
+
+  // Priority 0: nil channel - block forever (nil is represented as FuncVal)
   rule <thread>...
          <tid> _Tid </tid>
-         <k> recvWithOk(channel(CIdOk2, bool)) => tuple(ListItem(false) ListItem(false)) ... </k>
+         <k> recvWithOk(_FV:FuncVal) => waitingRecvOk(0) ... </k>
+       ...</thread>
+    [priority(10)]
+
+  // Priority 1: Buffer has values and waiting sender - take from buffer, refill from sender
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> recvWithOk(channel(CId, T)) => tuple(ListItem(V) ListItem(true)) ... </k>
        ...</thread>
        <channels>...
-         CIdOk2 |-> chanState(.List, _RecvQ, .List, _Size, bool, true)
+         CId |-> (chanState((ListItem(sendItem(SendTid:Int, SV)) SendRest:List), RecvQ,
+                           (ListItem(V) BufRest:List), Size, T, Closed)
+              => chanState(SendRest, RecvQ, BufRest ListItem(SV), Size, T, Closed))
        ...</channels>
+       <thread>...
+         <tid> SendTid </tid>
+         <k> waitingSend(CId, _) => .K ... </k>
+       ...</thread>
+    [priority(20)]
+
+  // Priority 2: Buffer has values but no waiting sender - just take from buffer
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> recvWithOk(channel(CId, T)) => tuple(ListItem(V) ListItem(true)) ... </k>
+       ...</thread>
+       <channels>...
+         CId |-> (chanState(SendQ, RecvQ, (ListItem(V) BufRest:List), Size, T, Closed)
+              => chanState(SendQ, RecvQ, BufRest, Size, T, Closed))
+       ...</channels>
+    [priority(30)]
+
+  // Priority 3: Waiting sender exists and buffer is empty - receive directly via handshake
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> recvWithOk(channel(CId, T)) => tuple(ListItem(V) ListItem(true)) ... </k>
+       ...</thread>
+       <channels>...
+         CId |-> (chanState((ListItem(sendItem(SendTid:Int, V)) SendRest:List), RecvQ, .List, Size, T, Closed)
+              => chanState(SendRest, RecvQ, .List, Size, T, Closed))
+       ...</channels>
+       <thread>...
+         <tid> SendTid </tid>
+         <k> waitingSend(CId, _) => .K ... </k>
+       ...</thread>
+    [priority(40)]
+
+  // Priority 4: Channel is closed and buffer is empty - return (zeroValue, false)
+  // For int channels
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> recvWithOk(channel(CId, int)) => tuple(ListItem(0) ListItem(false)) ... </k>
+       ...</thread>
+       <channels>...
+         CId |-> chanState(.List, _RecvQ, .List, _Size, int, true)
+       ...</channels>
+    [priority(50)]
+
+  // For bool channels
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> recvWithOk(channel(CId, bool)) => tuple(ListItem(false) ListItem(false)) ... </k>
+       ...</thread>
+       <channels>...
+         CId |-> chanState(.List, _RecvQ, .List, _Size, bool, true)
+       ...</channels>
+    [priority(50)]
+
+  // Priority 5: Nothing available and not closed - block (add to recv queue with ok flag)
+  rule <thread>...
+         <tid> Tid </tid>
+         <k> recvWithOk(channel(CId, T)) => waitingRecvOk(CId) ... </k>
+       ...</thread>
+       <channels>...
+         CId |-> (chanState(.List, RecvQ, .List, Size, T, false)
+              => chanState(.List, RecvQ ListItem(recvOkItem(Tid)), .List, Size, T, false))
+       ...</channels>
+    [priority(60)]
 
   // Go specification: for range channel
   // for v := range ch - receives from channel until closed
@@ -421,8 +530,13 @@ module GO-CONCURRENT
   // Internal: waiting states for blocked threads
   syntax KItem ::= waitingSend(Int, K)  // waitingSend(channelId, value)
                  | waitingRecv(Int)      // waitingRecv(channelId)
+                 | waitingRecvOk(Int)    // waitingRecvOk(channelId) - for multi-value receive
 
   syntax SendItem ::= sendItem(Int, K)  // sendItem(tid, value)
+
+  // RecvItem: distinguish between normal receive and receive-with-ok
+  syntax RecvItem ::= Int              // tid for normal receive
+                    | recvOkItem(Int)  // tid for receive-with-ok
 
   // panic implementation (simple version)
   // For now, panics just halt execution

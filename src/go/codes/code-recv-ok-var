@@ -1,0 +1,31 @@
+package main
+
+func main() {
+  ch := make(chan bool, 1);
+  ch <- true;
+
+  var v, ok = <-ch;
+  if v {
+    print(1);
+  } else {
+    print(0);
+  };
+  if ok {
+    print(1);
+  } else {
+    print(0);
+  };
+
+  close(ch);
+  var v2, ok2 = <-ch;
+  if v2 {
+    print(1);
+  } else {
+    print(0);
+  };
+  if ok2 {
+    print(1);
+  } else {
+    print(0);
+  };
+}

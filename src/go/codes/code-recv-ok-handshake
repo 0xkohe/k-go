@@ -1,0 +1,27 @@
+package main
+
+func sender(ch chan int) {
+  ch <- 99;
+}
+
+func main() {
+  ch := make(chan int);
+  go sender(ch);
+
+  v, ok := <-ch;
+  print(v);
+  if ok {
+    print(1);
+  } else {
+    print(0);
+  };
+
+  close(ch);
+  v2, ok2 := <-ch;
+  print(v2);
+  if ok2 {
+    print(1);
+  } else {
+    print(0);
+  };
+}
