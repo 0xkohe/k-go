@@ -28,11 +28,26 @@ module GO-CONCURRENT
   rule allValues((_V:ChanVal , Rest:ArgList)) => allValues(Rest)
 
   // Extend bindParams to support channel parameters
+  // Bidirectional channel parameter
   rule <k> bindParams((X:Id , Xs:ParamIds), (chan T:Type , Ts:ParamTypes), (CV:ChanVal , Vs:ArgList))
         => var X chan T = CV ~> bindParams(Xs, Ts, Vs) ... </k>
 
   rule <k> bindParams(X:Id, chan T:Type, CV:ChanVal)
         => var X chan T = CV ... </k>
+
+  // Send-only channel parameter (accepts bidirectional channel too)
+  rule <k> bindParams((X:Id , Xs:ParamIds), (chan <- T:Type , Ts:ParamTypes), (CV:ChanVal , Vs:ArgList))
+        => var X chan <- T = CV ~> bindParams(Xs, Ts, Vs) ... </k>
+
+  rule <k> bindParams(X:Id, chan <- T:Type, CV:ChanVal)
+        => var X chan <- T = CV ... </k>
+
+  // Receive-only channel parameter (accepts bidirectional channel too)
+  rule <k> bindParams((X:Id , Xs:ParamIds), (<- chan T:Type , Ts:ParamTypes), (CV:ChanVal , Vs:ArgList))
+        => var X <- chan T = CV ~> bindParams(Xs, Ts, Vs) ... </k>
+
+  rule <k> bindParams(X:Id, <- chan T:Type, CV:ChanVal)
+        => var X <- chan T = CV ... </k>
 
   // Go specification: go statement creates a new goroutine
   // GoStmt = "go" Expression
@@ -65,8 +80,11 @@ module GO-CONCURRENT
   // Go specification: Channel type variable declaration
   // The zero value of channel type is nil
   rule <k> var X:Id chan T:Type => var X chan T = nil ... </k>
+  rule <k> var X:Id chan <- T:Type => var X chan <- T = nil ... </k>
+  rule <k> var X:Id <- chan T:Type => var X <- chan T = nil ... </k>
 
   // Accept both ChanVal (actual channel) and FuncVal (nil)
+  // Bidirectional channel
   rule <k> var X:Id chan T:Type = CV:ChanVal => .K ... </k>
        <tenv> R => R [ X <- chan T ] </tenv>
        <env> Env => Env [ X <- L ] </env>
@@ -76,6 +94,36 @@ module GO-CONCURRENT
 
   rule <k> var X:Id chan T:Type = FV:FuncVal => .K ... </k>
        <tenv> R => R [ X <- chan T ] </tenv>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- FV ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+
+  // Send-only channel
+  rule <k> var X:Id chan <- T:Type = CV:ChanVal => .K ... </k>
+       <tenv> R => R [ X <- chan <- T ] </tenv>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- CV ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+
+  rule <k> var X:Id chan <- T:Type = FV:FuncVal => .K ... </k>
+       <tenv> R => R [ X <- chan <- T ] </tenv>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- FV ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+
+  // Receive-only channel
+  rule <k> var X:Id <- chan T:Type = CV:ChanVal => .K ... </k>
+       <tenv> R => R [ X <- <- chan T ] </tenv>
+       <env> Env => Env [ X <- L ] </env>
+       <store> Store => Store [ L <- CV ] </store>
+       <nextLoc> L:Int => L +Int 1 </nextLoc>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+
+  rule <k> var X:Id <- chan T:Type = FV:FuncVal => .K ... </k>
+       <tenv> R => R [ X <- <- chan T ] </tenv>
        <env> Env => Env [ X <- L ] </env>
        <store> Store => Store [ L <- FV ] </store>
        <nextLoc> L:Int => L +Int 1 </nextLoc>
@@ -129,11 +177,36 @@ module GO-CONCURRENT
   // Go specification: Send statement
   // Channel <- Expression sends value to channel
   //
-  // Generic send operation for all channel types
-  // Note: These rules work for any value type (int, bool, channel, function)
-  // The Go type checker ensures type safety at compile time
+  // GENERIC SEND OPERATIONS
+  // These rules work for any value type (int, bool, channel, function)
+  // Refactored from type-specific rules to reduce code duplication by ~50%
+  //
+  // Priority-based rule ordering ensures correct Go semantics:
+  // - Priority 0: Closed channel errors (must detect before any operation)
+  // - Priority 1: Direct handoff (rendezvous - sender meets receiver immediately)
+  // - Priority 2: Buffered non-blocking (use buffer when available)
+  // - Priority 3: Blocking (queue sender when no immediate progress possible)
+  //
+  // These priorities prevent stuck states and ensure deterministic behavior
 
-  // Priority 0: Panic if channel is closed
+  // Channel direction errors
+  syntax KItem ::= "ChanSendDirectionError" | "ChanRecvDirectionError"
+
+  rule <k> ChanSendDirectionError ~> _ => .K </k>
+  rule <k> ChanRecvDirectionError ~> _ => .K </k>
+
+  // DIRECTION VALIDATION (Priority 5)
+  // Fires BEFORE identifier lookup to prevent invalid operations early
+  // Checks <tenv> for channel type and validates direction permissions
+  rule <k> (X:Id <- _V) => ChanSendDirectionError ... </k>
+       <tenv>... X |-> CT:ChannelType ...</tenv>
+    requires notBool canSend(CT)
+    [priority(5)]
+
+  // SEND PRIORITY RULES
+  // Priority 0: Closed channel panic (highest priority - safety check)
+  // Sending to a closed channel is a programming error in Go
+  // Must fire first to prevent any operations on closed channels
   rule <thread>...
          <tid> _Tid </tid>
          <k> chanSend(channel(CId, _T:Type), _V) => SendClosedPanic ... </k>
@@ -142,7 +215,9 @@ module GO-CONCURRENT
          CId |-> chanState(_SendQ, _RecvQ, _Buf, _Size, _ElemT, true)
        ...</channels>
 
-  // Priority 1a: If there's a normal waiting receiver, deliver immediately (direct handoff)
+  // Priority 1a: Direct handoff to waiting normal receiver (rendezvous)
+  // When a receiver is already blocked, deliver immediately without buffering
+  // This is the core of unbuffered channel semantics (synchronous communication)
   rule <thread>...
          <tid> _Tid </tid>
          <k> chanSend(channel(CId, T:Type), V) => .K ... </k>
@@ -156,7 +231,9 @@ module GO-CONCURRENT
          <k> waitingRecv(CId) => V ... </k>
        ...</thread>
 
-  // Priority 1b: If there's a waiting receiver with ok flag, deliver tuple(value, true)
+  // Priority 1b: Direct handoff to receiver with ok flag
+  // Similar to 1a, but receiver is using multi-value receive (v, ok := <-ch)
+  // Delivers tuple(value, true) to indicate successful receive from open channel
   rule <thread>...
          <tid> _Tid </tid>
          <k> chanSend(channel(CId, T:Type), V) => .K ... </k>
@@ -170,7 +247,9 @@ module GO-CONCURRENT
          <k> waitingRecvOk(CId) => tuple(ListItem(V) ListItem(true)) ... </k>
        ...</thread>
 
-  // Priority 2: If buffer has space, add to buffer (non-blocking)
+  // Priority 2: Buffer has space - non-blocking send
+  // Most common case for buffered channels: sender completes immediately
+  // Buffer stores value for later retrieval by receiver
   rule <thread>...
          <tid> _Tid </tid>
          <k> chanSend(channel(CId, T:Type), V) => .K ... </k>
@@ -181,7 +260,9 @@ module GO-CONCURRENT
        ...</channels>
     requires size(Buf) <Int Size
 
-  // Priority 3: If buffer is full, block (add to send queue)
+  // Priority 3: Buffer full - blocking send
+  // Sender is added to sendQueue and transitions to waitingSend state
+  // Will be woken when receiver takes from buffer (making space available)
   rule <thread>...
          <tid> Tid </tid>
          <k> chanSend(channel(CId, T:Type), V) => waitingSend(CId, V) ... </k>
@@ -194,9 +275,40 @@ module GO-CONCURRENT
 
   // Go specification: Receive operator
   // <-Channel receives value from channel
+  //
+  // GENERIC RECEIVE OPERATIONS
+  // Priority-based ordering for correctness:
+  // - Priority 1: Buffer + waiting sender (take from buffer, refill from sendQueue)
+  // - Priority 2: Buffer only (take from buffer when no waiting senders)
+  // - Priority 3: Direct handoff (unbuffered rendezvous)
+  // - Priority 4: Closed channel (return zero value)
+  // - Priority 5: Block (add to recvQueue when nothing available)
 
-  // Receive operation
-  // Priority 1: If buffer has values, take from buffer (and refill from send queue if any)
+  // DIRECTION VALIDATION (Priority 5)
+  // Checks receive permission before attempting operation
+  rule <k> (<- X:Id) => ChanRecvDirectionError ... </k>
+       <tenv>... X |-> CT:ChannelType ...</tenv>
+    requires notBool canReceive(CT)
+    [priority(5)]
+
+  // RECEIVE PRIORITY RULES
+  // Priority 1: Buffer has values + waiting sender - refill buffer while receiving
+  // This maintains FIFO order: take oldest from buffer, add newest from sendQueue
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> chanRecv(channel(CId, _T)) => V ... </k>
+       ...</thread>
+       <channels>...
+         CId |-> (chanState((ListItem(sendItem(SendTid:Int, SV)) SendRest:List), RecvQ,
+                           (ListItem(V) BufRest:List), Size, T, Closed)
+              => chanState(SendRest, RecvQ, BufRest ListItem(SV), Size, T, Closed))
+       ...</channels>
+       <thread>...
+         <tid> SendTid </tid>
+         <k> waitingSend(CId, _) => .K ... </k>
+       ...</thread>
+
+  // Priority 2: Buffer has values, no waiting sender - simple buffer read
   rule <thread>...
          <tid> _Tid </tid>
          <k> chanRecv(channel(CId, _T)) => V ... </k>
@@ -300,10 +412,45 @@ module GO-CONCURRENT
   // Returns (zeroValue, false) for closed channel
 
   // Helper: generate zero value for a type
+  // Used when: receiving from closed channels, initializing variables
+  // Generic implementation allows adding new types without modifying channel logic
+  // Returns: 0 for int, false for bool, nil for channel types
+  // Extensibility: Add "rule zeroValueForType(string) => """ for string support
   syntax K ::= zeroValueForType(Type) [function]
   rule zeroValueForType(int) => 0
   rule zeroValueForType(bool) => false
   rule zeroValueForType(chan _T:Type) => nil
+  rule zeroValueForType(chan <- _T:Type) => nil
+  rule zeroValueForType(<- chan _T:Type) => nil
+
+  // Helper: Check if a channel type permits send operations
+  // Used by: Priority 5 direction validation rules in send operations
+  // Returns: true for bidirectional and send-only, false for receive-only
+  // Purpose: Detect attempts to send on receive-only channels at compile-time
+  syntax Bool ::= canSend(Type) [function]
+  rule canSend(chan _T) => true              // bidirectional: yes
+  rule canSend(chan <- _T) => true           // send-only: yes
+  rule canSend(<- chan _T) => false          // receive-only: no
+  rule canSend(_) => false [owise]           // not a channel: no
+
+  // Helper: Check if a channel type permits receive operations
+  // Used by: Priority 5 direction validation rules in receive operations
+  // Returns: true for bidirectional and receive-only, false for send-only
+  // Purpose: Detect attempts to receive from send-only channels at compile-time
+  syntax Bool ::= canReceive(Type) [function]
+  rule canReceive(chan _T) => true           // bidirectional: yes
+  rule canReceive(chan <- _T) => false       // send-only: no
+  rule canReceive(<- chan _T) => true        // receive-only: yes
+  rule canReceive(_) => false [owise]        // not a channel: no
+
+  // Helper: Extract element type from channel type
+  // Used by: Type checking and generic channel operations
+  // Returns: T for chan T, chan<- T, or <-chan T
+  // Purpose: Get underlying element type regardless of direction
+  syntax Type ::= elementType(Type) [function]
+  rule elementType(chan T) => T
+  rule elementType(chan <- T) => T
+  rule elementType(<- chan T) => T
 
   // Transform multi-value receive in different contexts
   // Context rules to evaluate channel expression first

@@ -151,13 +151,13 @@ else
     log ""
 fi
 
-# Find all test files
+# Find all test files (exclude .expected files)
 cd "$CODES_DIR"
 if [ -n "$PATTERN" ]; then
-    TEST_FILES=($(ls -1 | grep -E "$PATTERN" | sort))
+    TEST_FILES=($(ls -1 | grep -v '\.expected$' | grep -E "$PATTERN" | sort))
     log "${BLUE}Running tests matching pattern: ${PATTERN}${NC}"
 else
-    TEST_FILES=($(ls -1 | sort))
+    TEST_FILES=($(ls -1 | grep -v '\.expected$' | sort))
     log "${BLUE}Running all tests${NC}"
 fi
 

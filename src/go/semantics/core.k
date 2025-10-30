@@ -71,8 +71,16 @@ module GO
        <constEnv> _ => CE </constEnv>
        <scopeDecls> (SD ListItem(_)) => SD </scopeDecls>
 
+  // print function for Int
   rule <k> print(I:Int) => .K ... </k>
        <out> OL => OL ListItem(I) </out>
+
+  // print function for Bool (converts to 0/1 for output)
+  rule <k> print(true) => .K ... </k>
+       <out> OL => OL ListItem(1) </out>
+
+  rule <k> print(false) => .K ... </k>
+       <out> OL => OL ListItem(0) </out>
 
   // Variable declarations with store-based semantics
   rule <k> var X:Id int => var X int = 0 ... </k>
