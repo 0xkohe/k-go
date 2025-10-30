@@ -42,4 +42,18 @@ module GO-SYNTAX-CONCURRENT
   // Go specification: Receive operator
   // <-ch returns the value received from channel ch
   syntax Exp ::= "<-" Exp [strict(1), symbol(chanRecv)]
+
+  // Go specification: close(ch) closes a channel
+  // After close, receives return zero value and ok=false
+  // Sends to closed channel cause panic
+  syntax CloseStmt ::= "close" "(" Exp ")" [strict(1)]
+  syntax Statement ::= CloseStmt
+
+  // Go specification: Multi-valued receive (v, ok := <-ch)
+  // ok is false if channel is closed, true otherwise
+  // This is handled specially in short declaration syntax
+  syntax Exp ::= recvWithOk(Exp) [strict(1)]
+
+  // Special syntax for two-variable channel receive
+  syntax ShortVarDecl ::= Id "," Id ":=" "<-" Exp [strict(2)]
 endmodule
