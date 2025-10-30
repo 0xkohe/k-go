@@ -16,6 +16,10 @@ module GO-CONCURRENT
   // Channel value type stored in <store>
   syntax ChanVal ::= channel(Int, Type)  // channel(id, elementType)
   syntax Exp ::= ChanVal
+
+  // Val represents all types that can be sent through channels
+  // Note: KResult is already defined in core.k as Int | Bool | FuncVal | Tuple
+  // We extend it here to also include ChanVal
   syntax Val ::= ChanVal
   syntax KResult ::= Val
 
@@ -124,25 +128,28 @@ module GO-CONCURRENT
 
   // Go specification: Send statement
   // Channel <- Expression sends value to channel
+  //
+  // Generic send operation for all channel types
+  // Note: These rules work for any value type (int, bool, channel, function)
+  // The Go type checker ensures type safety at compile time
 
-  // Send operation for int channels
   // Priority 0: Panic if channel is closed
   rule <thread>...
          <tid> _Tid </tid>
-         <k> chanSend(channel(CId, int), _V:Int) => SendClosedPanic ... </k>
+         <k> chanSend(channel(CId, _T:Type), _V) => SendClosedPanic ... </k>
        ...</thread>
        <channels>...
-         CId |-> chanState(_SendQ, _RecvQ, _Buf, _Size, int, true)
+         CId |-> chanState(_SendQ, _RecvQ, _Buf, _Size, _ElemT, true)
        ...</channels>
 
-  // Priority 1a: If there's a normal waiting receiver, deliver immediately
+  // Priority 1a: If there's a normal waiting receiver, deliver immediately (direct handoff)
   rule <thread>...
          <tid> _Tid </tid>
-         <k> chanSend(channel(CId, int), V:Int) => .K ... </k>
+         <k> chanSend(channel(CId, T:Type), V) => .K ... </k>
        ...</thread>
        <channels>...
-         CId |-> (chanState(SendQ, (ListItem(RecvTid:Int) RecvRest:List), Buf, Size, int, false)
-              => chanState(SendQ, RecvRest, Buf, Size, int, false))
+         CId |-> (chanState(SendQ, (ListItem(RecvTid:Int) RecvRest:List), Buf, Size, T, false)
+              => chanState(SendQ, RecvRest, Buf, Size, T, false))
        ...</channels>
        <thread>...
          <tid> RecvTid </tid>
@@ -152,11 +159,11 @@ module GO-CONCURRENT
   // Priority 1b: If there's a waiting receiver with ok flag, deliver tuple(value, true)
   rule <thread>...
          <tid> _Tid </tid>
-         <k> chanSend(channel(CId, int), V:Int) => .K ... </k>
+         <k> chanSend(channel(CId, T:Type), V) => .K ... </k>
        ...</thread>
        <channels>...
-         CId |-> (chanState(SendQ, (ListItem(recvOkItem(RecvTid:Int)) RecvRest:List), Buf, Size, int, false)
-              => chanState(SendQ, RecvRest, Buf, Size, int, false))
+         CId |-> (chanState(SendQ, (ListItem(recvOkItem(RecvTid:Int)) RecvRest:List), Buf, Size, T, false)
+              => chanState(SendQ, RecvRest, Buf, Size, T, false))
        ...</channels>
        <thread>...
          <tid> RecvTid </tid>
@@ -166,82 +173,22 @@ module GO-CONCURRENT
   // Priority 2: If buffer has space, add to buffer (non-blocking)
   rule <thread>...
          <tid> _Tid </tid>
-         <k> chanSend(channel(CId, int), V:Int) => .K ... </k>
+         <k> chanSend(channel(CId, T:Type), V) => .K ... </k>
        ...</thread>
        <channels>...
-         CId |-> (chanState(SendQ, .List, Buf, Size, int, false)
-              => chanState(SendQ, .List, Buf ListItem(V), Size, int, false))
+         CId |-> (chanState(SendQ, .List, Buf, Size, T, false)
+              => chanState(SendQ, .List, Buf ListItem(V), Size, T, false))
        ...</channels>
     requires size(Buf) <Int Size
 
   // Priority 3: If buffer is full, block (add to send queue)
   rule <thread>...
          <tid> Tid </tid>
-         <k> chanSend(channel(CId, int), V:Int) => waitingSend(CId, V) ... </k>
+         <k> chanSend(channel(CId, T:Type), V) => waitingSend(CId, V) ... </k>
        ...</thread>
        <channels>...
-         CId |-> (chanState(SendQ, .List, Buf, Size, int, false)
-              => chanState(SendQ ListItem(sendItem(Tid, V)), .List, Buf, Size, int, false))
-       ...</channels>
-    requires size(Buf) >=Int Size
-
-  // Send operation for bool channels
-  // Priority 0: Panic if channel is closed
-  rule <thread>...
-         <tid> _Tid </tid>
-         <k> chanSend(channel(CId, bool), _V:Bool) => SendClosedPanic ... </k>
-       ...</thread>
-       <channels>...
-         CId |-> chanState(_SendQ, _RecvQ, _Buf, _Size, bool, true)
-       ...</channels>
-
-  // Priority 1a: If there's a normal waiting receiver, deliver immediately
-  rule <thread>...
-         <tid> _Tid </tid>
-         <k> chanSend(channel(CId, bool), V:Bool) => .K ... </k>
-       ...</thread>
-       <channels>...
-         CId |-> (chanState(SendQ, (ListItem(RecvTid:Int) RecvRest:List), Buf, Size, bool, false)
-              => chanState(SendQ, RecvRest, Buf, Size, bool, false))
-       ...</channels>
-       <thread>...
-         <tid> RecvTid </tid>
-         <k> waitingRecv(CId) => V ... </k>
-       ...</thread>
-
-  // Priority 1b: If there's a waiting receiver with ok flag, deliver tuple(value, true)
-  rule <thread>...
-         <tid> _Tid </tid>
-         <k> chanSend(channel(CId, bool), V:Bool) => .K ... </k>
-       ...</thread>
-       <channels>...
-         CId |-> (chanState(SendQ, (ListItem(recvOkItem(RecvTid:Int)) RecvRest:List), Buf, Size, bool, false)
-              => chanState(SendQ, RecvRest, Buf, Size, bool, false))
-       ...</channels>
-       <thread>...
-         <tid> RecvTid </tid>
-         <k> waitingRecvOk(CId) => tuple(ListItem(V) ListItem(true)) ... </k>
-       ...</thread>
-
-  // Priority 2: If buffer has space, add to buffer (non-blocking)
-  rule <thread>...
-         <tid> _Tid </tid>
-         <k> chanSend(channel(CId, bool), V:Bool) => .K ... </k>
-       ...</thread>
-       <channels>...
-         CId |-> (chanState(SendQ, .List, Buf, Size, bool, false)
-              => chanState(SendQ, .List, Buf ListItem(V), Size, bool, false))
-       ...</channels>
-    requires size(Buf) <Int Size
-
-  // Priority 3: If buffer is full, block (add to send queue)
-  rule <thread>...
-         <tid> Tid </tid>
-         <k> chanSend(channel(CId, bool), V:Bool) => waitingSend(CId, V) ... </k>
-       ...</thread>
-       <channels>...
-         CId |-> (chanState(SendQ, .List, Buf, Size, bool, false)
-              => chanState(SendQ ListItem(sendItem(Tid, V)), .List, Buf, Size, bool, false))
+         CId |-> (chanState(SendQ, .List, Buf, Size, T, false)
+              => chanState(SendQ ListItem(sendItem(Tid, V)), .List, Buf, Size, T, false))
        ...</channels>
     requires size(Buf) >=Int Size
 
@@ -291,18 +238,10 @@ module GO-CONCURRENT
   // Priority 4: If channel is closed and nothing in buffer, return zero value
   rule <thread>...
          <tid> _Tid </tid>
-         <k> chanRecv(channel(CIdClosed, int)) => 0 ... </k>
+         <k> chanRecv(channel(CId, T:Type)) => zeroValueForType(T) ... </k>
        ...</thread>
        <channels>...
-         CIdClosed |-> chanState(.List, _RecvQ, .List, _Size, int, true)
-       ...</channels>
-
-  rule <thread>...
-         <tid> _Tid </tid>
-         <k> chanRecv(channel(CIdClosed2, bool)) => false ... </k>
-       ...</thread>
-       <channels>...
-         CIdClosed2 |-> chanState(.List, _RecvQ, .List, _Size, bool, true)
+         CId |-> chanState(.List, _RecvQ, .List, _Size, T, true)
        ...</channels>
 
   // Priority 5: Nothing available and not closed, block (add to recv queue)
@@ -325,24 +264,14 @@ module GO-CONCURRENT
          CId |-> chanState(_SendQ, _RecvQ, _Buf, _Size, _ElemT, true)
        ...</channels>
 
-  // close() for int channel - wake all waiting receivers with zero value
+  // close() for any channel type - wake all waiting receivers with zero value
   rule <thread>...
          <tid> _Tid </tid>
-         <k> close(channel(CId, int)) => wakeReceivers(RecvQ, CId, 0) ... </k>
+         <k> close(channel(CId, T:Type)) => wakeReceivers(RecvQ, CId, zeroValueForType(T)) ... </k>
        ...</thread>
        <channels>...
-         CId |-> (chanState(SendQ, RecvQ, Buf, Size, int, false)
-              => chanState(SendQ, .List, Buf, Size, int, true))
-       ...</channels>
-
-  // close() for bool channel - wake all waiting receivers with zero value
-  rule <thread>...
-         <tid> _Tid </tid>
-         <k> close(channel(CId, bool)) => wakeReceivers(RecvQ, CId, false) ... </k>
-       ...</thread>
-       <channels>...
-         CId |-> (chanState(SendQ, RecvQ, Buf, Size, bool, false)
-              => chanState(SendQ, .List, Buf, Size, bool, true))
+         CId |-> (chanState(SendQ, RecvQ, Buf, Size, T, false)
+              => chanState(SendQ, .List, Buf, Size, T, true))
        ...</channels>
 
   // Helper: wake all waiting receivers with zero value
@@ -457,20 +386,21 @@ module GO-CONCURRENT
     [priority(40)]
 
   // Priority 4: Channel is closed and buffer is empty - return (zeroValue, false)
-  // For int channels
+  // Separate rules for each type to avoid parser issues with nested function calls
   rule <thread>...
          <tid> _Tid </tid>
-         <k> recvWithOk(channel(CId, int)) => tuple(ListItem(0) ListItem(false)) ... </k>
+         <k> recvWithOk(channel(CId, int))
+          => tuple(ListItem(0) ListItem(false)) ... </k>
        ...</thread>
        <channels>...
          CId |-> chanState(.List, _RecvQ, .List, _Size, int, true)
        ...</channels>
     [priority(50)]
 
-  // For bool channels
   rule <thread>...
          <tid> _Tid </tid>
-         <k> recvWithOk(channel(CId, bool)) => tuple(ListItem(false) ListItem(false)) ... </k>
+         <k> recvWithOk(channel(CId, bool))
+          => tuple(ListItem(false) ListItem(false)) ... </k>
        ...</thread>
        <channels>...
          CId |-> chanState(.List, _RecvQ, .List, _Size, bool, true)
