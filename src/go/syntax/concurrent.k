@@ -23,8 +23,9 @@ module GO-SYNTAX-CONCURRENT
 
   // Go specification: Making channels
   // make(T) - unbuffered channel of type T
-  // make(T, n) - buffered channel of type T with buffer size n (future)
+  // make(T, n) - buffered channel of type T with buffer size n
   syntax Exp ::= "make" "(" ChannelType ")"
+               | "make" "(" ChannelType "," Exp ")" [strict(2)]
 
   // Go specification: SendStmt = Channel "<-" Expression .
   // Go specification: Channel  = Expression .
