@@ -1,0 +1,10 @@
+package main
+
+func printInt(x int) {
+	print(x);
+}
+
+func main() {
+	y := 42;
+	printInt(y);
+}

@@ -1,0 +1,12 @@
+package main
+
+func sender(ch chan int, val int) {
+	ch <- val;
+}
+
+func main() {
+	ch := make(chan int);
+	go sender(ch, 100);
+	result := <-ch;
+	print(result);
+}

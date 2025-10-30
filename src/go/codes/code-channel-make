@@ -1,0 +1,7 @@
+package main
+
+func main() {
+	var ch chan int;
+	ch = make(chan int);
+	print(1);
+}
