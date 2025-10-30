@@ -3,3 +3,4 @@
 .clj-kondo/
 go_language_specification.txt
 K_framework_documentation.md
+test-logs

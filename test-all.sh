@@ -182,10 +182,20 @@ for test_file in "${TEST_FILES[@]}"; do
     TEST_OUTPUT=$(mktemp)
     TEST_ERROR=$(mktemp)
 
-    if timeout "$TIMEOUT" docker compose exec k bash -c "cd go && krun codes/$test_file --definition main-kompiled/" > "$TEST_OUTPUT" 2> "$TEST_ERROR"; then
+    # Run test (same way for both verbose and non-verbose)
+    # Keep docker exec in the foreground and close stdin to avoid SIGTTIN stalls.
+    if timeout --foreground "$TIMEOUT" \
+        docker compose exec -T \
+        k bash -lc "cd go && krun codes/$test_file --definition main-kompiled/" \
+        < /dev/null > "$TEST_OUTPUT" 2> "$TEST_ERROR"; then
         TEST_EXIT_CODE=0
     else
         TEST_EXIT_CODE=$?
+    fi
+
+    # Display output immediately if verbose
+    if [ "$VERBOSE" = true ]; then
+        cat "$TEST_OUTPUT"
     fi
 
     TEST_END=$(date +%s)
