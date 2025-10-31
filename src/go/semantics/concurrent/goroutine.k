@@ -21,14 +21,6 @@ module GO-GOROUTINE
   imports LIST
   imports MAP
 
-  // ============================================================================
-  // FUNCTION PARAMETER SUPPORT FOR CHANNELS
-  // ============================================================================
-
-  // Extend allValues to support channels in function arguments
-  rule allValues(_V:ChanVal) => true
-  rule allValues((_V:ChanVal , Rest:ArgList)) => allValues(Rest)
-
   // Extend bindParams to support channel parameters
 
   // Bidirectional channel parameter

@@ -19,26 +19,21 @@ module GO-FUNC
   syntax KItem ::= returnJoin(RetType)
   syntax KItem ::= bindParams(ParamIds, ParamTypes, ArgList)
 
-  // Context rules to evaluate arguments
-  context _:Id ( HOLE:Exp , _:ArgList )
-  context _:Id ( _:Exp , HOLE:Exp , _:ArgList )
-  context _:Id ( _:Exp , _:Exp , HOLE:Exp , _:ArgList )
-  context _:Id ( HOLE:Exp )
+  syntax CallCont ::= namedCall(Id, ParamIds, ParamTypes, RetType, Block)
+                    | funcValCall(ParamIds, ParamTypes, RetType, Block, Map, Map, Map)
+
+  syntax KItem ::= evaluateArgs(CallCont, ArgList, ArgList)
+  syntax KItem ::= applyCall(CallCont, ArgList)
+
+  syntax ArgList ::= appendArg(ArgList, Exp) [function]
+  rule appendArg(.ArgList, E:Exp) => E
+  rule appendArg(V:Exp, E:Exp) => V , E
+  rule appendArg(V:Exp , Rest:ArgList, E:Exp) => V , appendArg(Rest, E)
 
   // Go specification: Named function call (looks up function definition)
-  rule <k> F:Id (AL:ArgList) => enterScope(bindParams(PIs, PTs, AL) ~> B) ~> returnJoin(RT) ... </k>
+  rule <k> F:Id (AL:ArgList)
+        => evaluateArgs(namedCall(F, PIs, PTs, RT, B), AL, .ArgList) ... </k>
      <fenv> ... F |-> fun(PIs, PTs, RT, B) ... </fenv>
-    requires allValues(AL)
-
-  syntax Bool ::= allValues(ArgList) [function]
-  rule allValues(.ArgList) => true
-  rule allValues(_V:Int) => true
-  rule allValues(_V:Bool) => true
-  rule allValues(_V:FuncVal) => true
-  rule allValues((_V:Int , Rest:ArgList)) => allValues(Rest)
-  rule allValues((_V:Bool , Rest:ArgList)) => allValues(Rest)
-  rule allValues((_V:FuncVal , Rest:ArgList)) => allValues(Rest)
-  rule allValues(_) => false [owise]
 
   // If F is not in fenv, evaluate it as a variable and retry the call
   syntax KItem ::= retryCall(K, ArgList)
@@ -48,7 +43,25 @@ module GO-FUNC
 
   context retryCall(HOLE:KItem, _)
 
-  rule <k> retryCall(FV:FuncVal, AL) => FV (AL) ... </k>
+  rule <k> retryCall(funcVal(PIs, PTs, RT, B, ClosTEnv, ClosEnv, Meta), AL:ArgList)
+        => evaluateArgs(funcValCall(PIs, PTs, RT, B, ClosTEnv, ClosEnv, Meta), AL, .ArgList) ... </k>
+
+  context evaluateArgs(_CC:CallCont, (HOLE:Exp , _:ArgList), _Acc:ArgList)
+  context evaluateArgs(_CC:CallCont, HOLE:Exp, _Acc:ArgList)
+
+  rule <k> evaluateArgs(CC:CallCont, .ArgList, Acc:ArgList)
+        => applyCall(CC, Acc) ... </k>
+  rule <k> evaluateArgs(CC:CallCont, (V:Exp , Rest:ArgList), Acc:ArgList)
+        => evaluateArgs(CC, Rest, appendArg(Acc, V)) ... </k>
+    requires isKResult(V)
+  rule <k> evaluateArgs(CC:CallCont, V:Exp, Acc:ArgList)
+        => evaluateArgs(CC, .ArgList, appendArg(Acc, V)) ... </k>
+    requires isKResult(V)
+
+  rule <k> applyCall(namedCall(_F, PIs, PTs, RT, B), Args:ArgList)
+        => enterScope(bindParams(PIs, PTs, Args) ~> B) ~> returnJoin(RT) ... </k>
+  rule <k> applyCall(funcValCall(PIs, PTs, RT, B, ClosTEnv, ClosEnv, Meta), Args:ArgList)
+        => enterScope(restoreClosureEnv(ClosTEnv, ClosEnv, Meta) ~> bindParams(PIs, PTs, Args) ~> B) ~> returnJoin(RT) ... </k>
 
   // Go specification: Named function reference as function value
   // When a function name is referenced (not called), return its function value
@@ -74,8 +87,8 @@ module GO-FUNC
   // Go specification: Function value call (with closure environment)
   syntax KItem ::= restoreClosureEnv(Map, Map, Map)
 
-  rule <k> funcVal(PIs, PTs, RT, B, ClosTEnv, ClosEnv, _) (AL:ArgList)
-        => enterScope(restoreClosureEnv(ClosTEnv, ClosEnv, .Map) ~> bindParams(PIs, PTs, AL) ~> B) ~> returnJoin(RT) ... </k>
+  rule <k> funcVal(PIs, PTs, RT, B, ClosTEnv, ClosEnv, Meta) (AL:ArgList)
+        => evaluateArgs(funcValCall(PIs, PTs, RT, B, ClosTEnv, ClosEnv, Meta), AL, .ArgList) ... </k>
 
   // Restore closure environment (replace current environment)
   // The key change: we restore env (Id -> Loc) which SHARES the store!

@@ -1,0 +1,12 @@
+package main
+
+func add4(a int, b int, c int, d int) int {
+    return a + b + c + d;
+}
+
+func main() {
+    var x int = add4(1, 2, 3, 4);
+    print(x);
+
+    print(add4(1+1, 2+2, 3+3, 4+4));
+}
