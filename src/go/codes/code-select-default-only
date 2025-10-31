@@ -1,0 +1,9 @@
+package main
+
+func main() {
+  select {
+  default: {
+    print(42);
+  }
+  };
+}

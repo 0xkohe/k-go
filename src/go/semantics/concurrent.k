@@ -629,4 +629,450 @@ module GO-CONCURRENT
 
   rule <k> CloseClosedPanic ~> _ => .K </k>
 
+  // ============================================================================
+  // SELECT STATEMENT SEMANTICS
+  // ============================================================================
+  // Implements Go's select statement in four phases:
+  // 1. Evaluate each communication clause exactly once
+  // 2. Check which clauses are immediately ready
+  // 3. Choose a ready clause (or default) to execute
+  // 4. If none are ready and no default exists, block until one becomes ready
+
+  syntax EvalCase ::= evalSendCase(ChanVal, K, K)
+                    | evalRecvCase(ChanVal, K)
+                    | evalRecvAssignCase(ChanVal, Id, K)
+                    | evalRecvDeclCase(ChanVal, Id, K)
+                    | evalRecvOkCase(ChanVal, Id, Id, K)
+                    | evalDefaultCase(K)
+
+  syntax KItem ::= selectEval(CommClauses)
+                 | selectBuildCases(CommClauses, List)
+                 | selectWithCases(List)
+                 | selectCheckReady(List, List, K, List)
+                 | selectChooseFrom(List, K, List)
+                 | selectBlock(List, List)
+                 | executeSelectCase(EvalCase)
+
+  context selectBuildCases(
+            (case (HOLE:Exp <- _V:Exp) : _Body:Block)
+             ; _Rest:CommClauses,
+            _Acc:List)
+  context selectBuildCases(
+            (case (_Chan:Exp <- HOLE:Exp) : _Body:Block)
+             ; _Rest:CommClauses,
+            _Acc:List)
+  context selectBuildCases(
+            (case (<- HOLE:Exp) : _Body:Block)
+             ; _Rest:CommClauses,
+            _Acc:List)
+  context selectBuildCases(
+            (case (_X:Id = <- HOLE:Exp) : _Body:Block)
+             ; _Rest:CommClauses,
+            _Acc:List)
+  context selectBuildCases(
+            (case ((_X:Id , _Y:Id) = <- HOLE:Exp) : _Body:Block)
+             ; _Rest:CommClauses,
+            _Acc:List)
+  context selectBuildCases(
+            (case (_X:Id := <- HOLE:Exp) : _Body:Block)
+             ; _Rest:CommClauses,
+            _Acc:List)
+  context selectBuildCases(
+            (case ((_X:Id , _Y:Id) := <- HOLE:Exp) : _Body:Block)
+             ; _Rest:CommClauses,
+            _Acc:List)
+
+  syntax Int ::= chanId(ChanVal) [function]
+  rule chanId(channel(CId, _T)) => CId
+
+  syntax Bool ::= hasDefault(K) [function]
+  rule hasDefault(.K) => false
+  rule hasDefault(_) => true [owise]
+
+  rule <k> select { Cases:CommClauses }
+        => selectEval(Cases) ... </k>
+
+  rule <k> selectEval(Cases:CommClauses)
+        => selectBuildCases(Cases, .List) ... </k>
+
+  rule <k> selectBuildCases(.CommClauses, Acc:List)
+        => selectWithCases(Acc) ... </k>
+
+  rule <k> selectBuildCases(
+          (case (Chan:ChanVal <- V) : Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(
+             Rest,
+             Acc ListItem(evalSendCase(Chan, V, Body))) ... </k>
+
+  rule <k> selectBuildCases(
+          (case (<- Chan:ChanVal) : Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(
+             Rest,
+             Acc ListItem(evalRecvCase(Chan, Body))) ... </k>
+
+  rule <k> selectBuildCases(
+          (case (X:Id = <- Chan:ChanVal) : Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(
+             Rest,
+             Acc ListItem(evalRecvAssignCase(Chan, X, Body))) ... </k>
+
+  rule <k> selectBuildCases(
+          (case ((X:Id , Y:Id) = <- Chan:ChanVal) : Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(
+             Rest,
+             Acc ListItem(evalRecvOkCase(Chan, X, Y, Body))) ... </k>
+
+  rule <k> selectBuildCases(
+          (case (X:Id := <- Chan:ChanVal) : Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(
+             Rest,
+             Acc ListItem(evalRecvDeclCase(Chan, X, Body))) ... </k>
+
+  rule <k> selectBuildCases(
+          (case ((X:Id , Y:Id) := <- Chan:ChanVal) : Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(
+             Rest,
+             Acc ListItem(evalRecvOkCase(Chan, X, Y, Body))) ... </k>
+
+  rule <k> selectBuildCases(
+          (default : Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(
+             Rest,
+             Acc ListItem(evalDefaultCase(Body))) ... </k>
+
+  rule <k> selectBuildCases(
+          (case (_Nil:FuncVal <- _) : _Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(Rest, Acc) ... </k>
+
+  rule <k> selectBuildCases(
+          (case (<- _Nil:FuncVal) : _Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(Rest, Acc) ... </k>
+
+  rule <k> selectBuildCases(
+          (case ( _:Id = <- _Nil:FuncVal) : _Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(Rest, Acc) ... </k>
+
+  rule <k> selectBuildCases(
+          (case ((_:Id , _:Id) = <- _Nil:FuncVal) : _Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(Rest, Acc) ... </k>
+
+  rule <k> selectBuildCases(
+          (case ( _:Id := <- _Nil:FuncVal) : _Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(Rest, Acc) ... </k>
+
+  rule <k> selectBuildCases(
+          (case ((_:Id , _:Id) := <- _Nil:FuncVal) : _Body:Block)
+           ; Rest:CommClauses,
+          Acc:List)
+        => selectBuildCases(Rest, Acc) ... </k>
+
+  rule <k> selectWithCases(Cases:List)
+        => selectCheckReady(Cases, .List, .K, Cases) ... </k>
+
+  rule <k> selectCheckReady(
+          .List,
+          Ready:List,
+          DefaultBody:K,
+          Orig:List)
+        => selectChooseFrom(Ready, DefaultBody, Orig) ... </k>
+
+  rule <k> selectCheckReady(
+          ListItem(evalSendCase(Chan, V, Body)) Rest:List,
+          Ready:List,
+          Default:K,
+          Orig:List)
+        => selectCheckReady(
+             Rest,
+             Ready ListItem(evalSendCase(Chan, V, Body)),
+             Default,
+             Orig) ... </k>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(_SendQ:List, RecvQ, Buf, Size, _T, Closed)
+       ...</channels>
+    requires (Closed ==Bool true)
+      orBool (size(Buf) <Int Size)
+      orBool (size(RecvQ) >Int 0)
+
+  rule <k> selectCheckReady(
+          ListItem(evalSendCase(Chan, _V, _Body)) Rest:List,
+          Ready:List,
+          Default:K,
+          Orig:List)
+        => selectCheckReady(Rest, Ready, Default, Orig) ... </k>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(_SendQ:List, RecvQ, Buf, Size, _T, false)
+       ...</channels>
+    requires (size(Buf) >=Int Size)
+      andBool (size(RecvQ) ==Int 0)
+
+  rule <k> selectCheckReady(
+          ListItem(evalRecvCase(Chan, Body)) Rest:List,
+          Ready:List,
+          Default:K,
+          Orig:List)
+        => selectCheckReady(
+             Rest,
+             Ready ListItem(evalRecvCase(Chan, Body)),
+             Default,
+             Orig) ... </k>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(SendQ:List, _RecvQ, Buf, _Size, _T, Closed)
+       ...</channels>
+    requires (size(Buf) >Int 0)
+      orBool (size(SendQ:List) >Int 0)
+      orBool (Closed ==Bool true)
+
+  rule <k> selectCheckReady(
+          ListItem(evalRecvCase(Chan, _Body)) Rest:List,
+          Ready:List,
+          Default:K,
+          Orig:List)
+        => selectCheckReady(Rest, Ready, Default, Orig) ... </k>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(SendQ:List, _RecvQ, Buf, _Size, _T, false)
+       ...</channels>
+    requires (size(Buf) ==Int 0)
+      andBool (size(SendQ:List) ==Int 0)
+
+  rule <k> selectCheckReady(
+          ListItem(evalRecvAssignCase(Chan, X, Body)) Rest:List,
+          Ready:List,
+          Default:K,
+          Orig:List)
+        => selectCheckReady(
+             Rest,
+             Ready ListItem(evalRecvAssignCase(Chan, X, Body)),
+             Default,
+             Orig) ... </k>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(SendQ:List, _RecvQ, Buf, _Size, _T, Closed)
+       ...</channels>
+    requires (size(Buf) >Int 0)
+      orBool (size(SendQ:List) >Int 0)
+      orBool (Closed ==Bool true)
+
+  rule <k> selectCheckReady(
+          ListItem(evalRecvAssignCase(Chan, _X, _Body)) Rest:List,
+          Ready:List,
+          Default:K,
+          Orig:List)
+        => selectCheckReady(Rest, Ready, Default, Orig) ... </k>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(SendQ:List, _RecvQ, Buf, _Size, _T, false)
+       ...</channels>
+    requires (size(Buf) ==Int 0)
+      andBool (size(SendQ:List) ==Int 0)
+
+  rule <k> selectCheckReady(
+          ListItem(evalRecvDeclCase(Chan, X, Body)) Rest:List,
+          Ready:List,
+          Default:K,
+          Orig:List)
+        => selectCheckReady(
+             Rest,
+             Ready ListItem(evalRecvDeclCase(Chan, X, Body)),
+             Default,
+             Orig) ... </k>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(SendQ:List, _RecvQ, Buf, _Size, _T, Closed)
+       ...</channels>
+    requires (size(Buf) >Int 0)
+      orBool (size(SendQ:List) >Int 0)
+      orBool (Closed ==Bool true)
+
+  rule <k> selectCheckReady(
+          ListItem(evalRecvDeclCase(Chan, _X, _Body)) Rest:List,
+          Ready:List,
+          Default:K,
+          Orig:List)
+        => selectCheckReady(Rest, Ready, Default, Orig) ... </k>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(SendQ:List, _RecvQ, Buf, _Size, _T, false)
+       ...</channels>
+    requires (size(Buf) ==Int 0)
+      andBool (size(SendQ:List) ==Int 0)
+
+  rule <k> selectCheckReady(
+          ListItem(evalRecvOkCase(Chan, V, Ok, Body)) Rest:List,
+          Ready:List,
+          Default:K,
+          Orig:List)
+        => selectCheckReady(
+             Rest,
+             Ready ListItem(evalRecvOkCase(Chan, V, Ok, Body)),
+             Default,
+             Orig) ... </k>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(SendQ, _RecvQ, Buf, _Size, _T, Closed)
+       ...</channels>
+    requires (size(Buf) >Int 0)
+      orBool (size(SendQ:List) >Int 0)
+      orBool (Closed ==Bool true)
+
+  rule <k> selectCheckReady(
+          ListItem(evalRecvOkCase(Chan, _V, _Ok, _Body)) Rest:List,
+          Ready:List,
+          Default:K,
+          Orig:List)
+        => selectCheckReady(Rest, Ready, Default, Orig) ... </k>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(SendQ, _RecvQ, Buf, _Size, _T, false)
+       ...</channels>
+    requires (size(Buf) ==Int 0)
+      andBool (size(SendQ:List) ==Int 0)
+
+  rule <k> selectCheckReady(
+          ListItem(evalDefaultCase(Body)) Rest:List,
+          Ready:List,
+          _Default:K,
+          Orig:List)
+        => selectCheckReady(Rest, Ready, Body, Orig) ... </k>
+
+  rule <k> selectChooseFrom(
+          ListItem(Case:EvalCase) _Rest:List,
+          _Default:K,
+          _Orig:List)
+        => executeSelectCase(Case) ... </k>
+
+  rule <k> selectChooseFrom(
+          .List,
+          Default:K,
+          _Orig:List)
+        => executeSelectCase(evalDefaultCase(Default)) ... </k>
+    requires hasDefault(Default)
+
+  rule <k> selectChooseFrom(
+          .List,
+          Default:K,
+          Orig:List)
+        => selectBlock(Orig, Orig) ... </k>
+    requires notBool hasDefault(Default)
+
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> selectBlock(
+              _L1:List ListItem(evalSendCase(Chan, _V, _Body)) _L2:List,
+              Orig:List)
+          => selectCheckReady(Orig, .List, .K, Orig) ... </k>
+       ...</thread>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(_SendQBlock:List, RecvQ, Buf, Size, _T, Closed)
+       ...</channels>
+    requires (Closed ==Bool true)
+      orBool (size(Buf) <Int Size)
+      orBool (size(RecvQ) >Int 0)
+
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> selectBlock(
+              _L1:List ListItem(evalRecvCase(Chan, _Body)) _L2:List,
+              Orig:List)
+          => selectCheckReady(Orig, .List, .K, Orig) ... </k>
+       ...</thread>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(SendQBlock:List, _RecvQ, Buf, _Size, _T, Closed)
+       ...</channels>
+    requires (size(Buf) >Int 0)
+      orBool (size(SendQBlock:List) >Int 0)
+      orBool (Closed ==Bool true)
+
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> selectBlock(
+              _L1:List ListItem(evalRecvAssignCase(Chan, _X, _Body)) _L2:List,
+              Orig:List)
+          => selectCheckReady(Orig, .List, .K, Orig) ... </k>
+       ...</thread>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(SendQBlock:List, _RecvQ, Buf, _Size, _T, Closed)
+       ...</channels>
+    requires (size(Buf) >Int 0)
+      orBool (size(SendQBlock:List) >Int 0)
+      orBool (Closed ==Bool true)
+
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> selectBlock(
+              _L1:List ListItem(evalRecvDeclCase(Chan, _X, _Body)) _L2:List,
+              Orig:List)
+          => selectCheckReady(Orig, .List, .K, Orig) ... </k>
+       ...</thread>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(SendQBlock:List, _RecvQ, Buf, _Size, _T, Closed)
+       ...</channels>
+    requires (size(Buf) >Int 0)
+      orBool (size(SendQBlock:List) >Int 0)
+      orBool (Closed ==Bool true)
+
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> selectBlock(
+              _L1:List ListItem(evalRecvOkCase(Chan, _V, _Ok, _Body)) _L2:List,
+              Orig:List)
+          => selectCheckReady(Orig, .List, .K, Orig) ... </k>
+       ...</thread>
+       <channels>...
+         chanId(Chan)
+           |-> chanState(SendQBlock:List, _RecvQ, Buf, _Size, _T, Closed)
+       ...</channels>
+    requires (size(Buf) >Int 0)
+      orBool (size(SendQBlock:List) >Int 0)
+      orBool (Closed ==Bool true)
+
+  rule <k> executeSelectCase(evalSendCase(Chan, V, Body))
+        => chanSend(Chan, V) ~> Body ... </k>
+
+  rule <k> executeSelectCase(evalRecvCase(Chan, Body))
+        => chanRecv(Chan) ~> Body ... </k>
+
+  rule <k> executeSelectCase(evalRecvAssignCase(Chan, X, Body))
+        => X = chanRecv(Chan) ~> Body ... </k>
+
+  rule <k> executeSelectCase(evalRecvDeclCase(Chan, X, Body))
+        => X := chanRecv(Chan) ~> Body ... </k>
+
+  rule <k> executeSelectCase(evalRecvOkCase(Chan, V, Ok, Body))
+        => (V, Ok) := recvWithOk(Chan) ~> Body ... </k>
+
+  rule <k> executeSelectCase(evalDefaultCase(Body))
+        => Body ... </k>
+
 endmodule
