@@ -17,7 +17,7 @@
 - Start dev container: `docker compose up -d --build`
 - Enter container: `docker compose exec k bash`
 - Compile Go semantics (inside container):
-  - `cd /app/go && kompile main.k --backend llvm`
+  - `cd /app/go && kompile main.k`
   - Produces `main-kompiled/` (clean with `rm -rf main-kompiled`).
 - Run sample program (inside ` /app/go`):
   - `krun codes/code` or `krun codes/code-s`
