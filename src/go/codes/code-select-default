@@ -1,0 +1,13 @@
+package main
+
+func main() {
+  ch := make(chan int);
+  select {
+  case <-ch: {
+    print(1);
+  };
+  default: {
+    print(2);
+  }
+  };
+}

@@ -84,4 +84,32 @@ module GO-SYNTAX-CONCURRENT
   syntax VarSpec ::= "var" Id "," Id "=" "<-" Exp
   syntax TopDecl ::= VarSpec
   syntax Statement ::= VarSpec
+
+  // ============================================================================
+  // SELECT STATEMENT SYNTAX
+  // ============================================================================
+  // Go specification: SelectStmt = "select" "{" { CommClause } "}" .
+  //
+  // Select chooses which of a set of possible send or receive operations
+  // will proceed. It looks similar to a switch but all cases refer to
+  // communication operations.
+
+  syntax SelectStmt ::= "select" "{" CommClauses "}"
+  syntax Statement ::= SelectStmt
+
+  // CommClause = CommCase ":" StatementList .
+  // For simplicity, we require blocks for each case (valid Go syntax)
+  // We use semicolon separator for clearer parsing
+  syntax CommClauses ::= List{CommClause, ";"}
+  syntax CommClause ::= CommCase ":" Block
+
+  // CommCase = "case" ( SendStmt | RecvStmt ) | "default" .
+  // Note: We reuse existing syntax for recv operations to avoid ambiguity
+  // RecvExpr is just Exp (the "<-" Exp syntax is already defined)
+  syntax CommCase ::= "case" SendStmt        // case ch <- v
+                    | "case" Exp             // case <-ch (Exp includes "<-" Exp)
+                    | "case" Assignment      // case x = <-ch or x, y = <-ch (reuse existing)
+                    | "case" ShortVarDecl    // case x := <-ch or x, ok := <-ch (reuse existing)
+                    | "default"
+
 endmodule

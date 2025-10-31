@@ -26,6 +26,7 @@ VERBOSE=false
 NO_COMPILE=false
 PATTERN=""
 TIMEOUT=30  # seconds per test
+JOBS=4      # parallel jobs
 
 # Counters
 TOTAL_TESTS=0
@@ -53,6 +54,7 @@ OPTIONS:
     -n, --no-compile        Skip recompilation of main.k
     -p, --pattern PATTERN   Only run tests matching PATTERN
     -t, --timeout SECONDS   Timeout per test (default: 30)
+    -j, --jobs N            Number of parallel jobs (default: 4)
     -h, --help             Show this help message
 
 EXAMPLES:
@@ -60,6 +62,7 @@ EXAMPLES:
     $0 --verbose                # Run with detailed output
     $0 --pattern "channel"      # Run only channel-related tests
     $0 --no-compile             # Skip compilation, run tests only
+    $0 --jobs 8                 # Run with 8 parallel jobs
 
 EOF
     exit 0
@@ -81,6 +84,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -t|--timeout)
             TIMEOUT="$2"
+            shift 2
+            ;;
+        -j|--jobs)
+            JOBS="$2"
             shift 2
             ;;
         -h|--help)
@@ -113,6 +120,84 @@ is_error_test() {
         return 0
     fi
     return 1
+}
+
+# Run a single test and save results to a temporary file
+run_single_test() {
+    local test_file="$1"
+    local result_file="$2"
+
+    # Check if it's an error test
+    local IS_ERROR_TEST=false
+    if is_error_test "$test_file"; then
+        IS_ERROR_TEST=true
+    fi
+
+    # Run test with timeout
+    local TEST_START=$(date +%s)
+    local TEST_OUTPUT=$(mktemp)
+    local TEST_ERROR=$(mktemp)
+
+    local TEST_EXIT_CODE=0
+    if timeout --foreground "$TIMEOUT" \
+        docker compose exec -T \
+        k bash -lc "cd go && krun codes/$test_file --definition main-kompiled/" \
+        < /dev/null > "$TEST_OUTPUT" 2> "$TEST_ERROR"; then
+        TEST_EXIT_CODE=0
+    else
+        TEST_EXIT_CODE=$?
+    fi
+
+    local TEST_END=$(date +%s)
+    local TEST_DURATION=$((TEST_END - TEST_START))
+
+    # Determine test result
+    local STATUS=""
+    local ERROR_MSG=""
+
+    if [ "$IS_ERROR_TEST" = true ]; then
+        # For error tests, we expect non-zero exit code or error output
+        if [ $TEST_EXIT_CODE -ne 0 ] || grep -q -i "error\|panic" "$TEST_ERROR" "$TEST_OUTPUT" 2>/dev/null; then
+            STATUS="EXPECTED_ERROR"
+        else
+            STATUS="ERROR_TEST_FAILED"
+            ERROR_MSG="Expected error but test passed"
+        fi
+    else
+        # For normal tests, we expect zero exit code
+        if [ $TEST_EXIT_CODE -eq 0 ]; then
+            STATUS="PASS"
+        else
+            if [ $TEST_EXIT_CODE -eq 124 ]; then
+                STATUS="TIMEOUT"
+                ERROR_MSG="Test timeout after ${TIMEOUT}s"
+            else
+                STATUS="FAIL"
+                ERROR_MSG=$(cat "$TEST_ERROR" | head -5 | tr '\n' ' ')
+                if [ -z "$ERROR_MSG" ]; then
+                    ERROR_MSG="Non-zero exit code: $TEST_EXIT_CODE"
+                fi
+            fi
+        fi
+    fi
+
+    # Save result as structured format
+    {
+        echo "TEST_FILE=$test_file"
+        echo "STATUS=$STATUS"
+        echo "DURATION=$TEST_DURATION"
+        echo "EXIT_CODE=$TEST_EXIT_CODE"
+        echo "ERROR_MSG=$ERROR_MSG"
+        echo "IS_ERROR_TEST=$IS_ERROR_TEST"
+        echo "---OUTPUT---"
+        cat "$TEST_OUTPUT"
+        echo "---ERROR---"
+        cat "$TEST_ERROR"
+        echo "---END---"
+    } > "$result_file"
+
+    # Cleanup temp files
+    rm -f "$TEST_OUTPUT" "$TEST_ERROR"
 }
 
 # Setup
@@ -168,100 +253,131 @@ log ""
 # Run tests
 START_TIME=$(date +%s)
 
+# Create temporary directory for test results
+RESULTS_DIR=$(mktemp -d)
+trap "rm -rf $RESULTS_DIR" EXIT
+
+# Export variables and functions needed by parallel execution
+export TIMEOUT
+export LOG_FILE
+export -f run_single_test is_error_test
+
+log "${BLUE}Running tests with ${JOBS} parallel jobs...${NC}"
+log ""
+
+# Run tests in parallel using xargs
+printf "%s\n" "${TEST_FILES[@]}" | \
+    xargs -I {} -P "$JOBS" bash -c "run_single_test '{}' '$RESULTS_DIR/{}.result'"
+
+log "${BLUE}Processing results...${NC}"
+log ""
+
+# Process results in file name order
 for test_file in "${TEST_FILES[@]}"; do
-    # Check if it's an error test
-    IS_ERROR_TEST=false
-    if is_error_test "$test_file"; then
-        IS_ERROR_TEST=true
+    result_file="$RESULTS_DIR/${test_file}.result"
+
+    if [ ! -f "$result_file" ]; then
+        log "${RED}[ERROR]${NC} Result file not found for $test_file"
+        continue
     fi
 
-    log_verbose "${CYAN}Running: ${test_file}${NC}"
+    # Parse result file
+    TEST_FILE=""
+    STATUS=""
+    DURATION=""
+    EXIT_CODE=""
+    ERROR_MSG=""
+    IS_ERROR_TEST=""
+    OUTPUT_CONTENT=""
+    ERROR_CONTENT=""
 
-    # Run test with timeout
-    TEST_START=$(date +%s)
-    TEST_OUTPUT=$(mktemp)
-    TEST_ERROR=$(mktemp)
+    # Read variables from result file
+    while IFS='=' read -r key value; do
+        case "$key" in
+            TEST_FILE) TEST_FILE="$value" ;;
+            STATUS) STATUS="$value" ;;
+            DURATION) DURATION="$value" ;;
+            EXIT_CODE) EXIT_CODE="$value" ;;
+            ERROR_MSG) ERROR_MSG="$value" ;;
+            IS_ERROR_TEST) IS_ERROR_TEST="$value" ;;
+            "---OUTPUT---")
+                # Read until ---ERROR---
+                OUTPUT_CONTENT=""
+                while IFS= read -r line; do
+                    if [ "$line" = "---ERROR---" ]; then
+                        break
+                    fi
+                    OUTPUT_CONTENT+="$line"$'\n'
+                done
+                ;;
+            "---ERROR---")
+                # Read until ---END---
+                ERROR_CONTENT=""
+                while IFS= read -r line; do
+                    if [ "$line" = "---END---" ]; then
+                        break
+                    fi
+                    ERROR_CONTENT+="$line"$'\n'
+                done
+                ;;
+        esac
+    done < "$result_file"
 
-    # Run test (same way for both verbose and non-verbose)
-    # Keep docker exec in the foreground and close stdin to avoid SIGTTIN stalls.
-    if timeout --foreground "$TIMEOUT" \
-        docker compose exec -T \
-        k bash -lc "cd go && krun codes/$test_file --definition main-kompiled/" \
-        < /dev/null > "$TEST_OUTPUT" 2> "$TEST_ERROR"; then
-        TEST_EXIT_CODE=0
-    else
-        TEST_EXIT_CODE=$?
-    fi
-
-    # Display output immediately if verbose
-    if [ "$VERBOSE" = true ]; then
-        cat "$TEST_OUTPUT"
-    fi
-
-    TEST_END=$(date +%s)
-    TEST_DURATION=$((TEST_END - TEST_START))
-
-    # Check result
-    if [ "$IS_ERROR_TEST" = true ]; then
-        ERROR_TESTS_RUN=$((ERROR_TESTS_RUN + 1))
-        # For error tests, we expect non-zero exit code or error output
-        if [ $TEST_EXIT_CODE -ne 0 ] || grep -q -i "error\|panic" "$TEST_ERROR" "$TEST_OUTPUT" 2>/dev/null; then
-            log "${YELLOW}[EXPECTED_ERROR]${NC} $test_file (${TEST_DURATION}s)"
-            ERROR_TESTS_PASSED=$((ERROR_TESTS_PASSED + 1))
-        else
-            log "${RED}[ERROR_TEST_FAILED]${NC} $test_file (${TEST_DURATION}s) - Should have failed but passed"
-            ERROR_TESTS_FAILED=$((ERROR_TESTS_FAILED + 1))
-            FAILED_TEST_NAMES+=("$test_file")
-            FAILED_TEST_ERRORS+=("Expected error but test passed")
-        fi
-    else
-        # For normal tests, we expect zero exit code
-        if [ $TEST_EXIT_CODE -eq 0 ]; then
-            log "${GREEN}[PASS]${NC} $test_file (${TEST_DURATION}s)"
+    # Display result
+    case "$STATUS" in
+        PASS)
+            log "${GREEN}[PASS]${NC} $TEST_FILE (${DURATION}s)"
             PASSED_TESTS=$((PASSED_TESTS + 1))
-        else
-            if [ $TEST_EXIT_CODE -eq 124 ]; then
-                log "${RED}[TIMEOUT]${NC} $test_file (>${TIMEOUT}s)"
-                FAILED_TEST_NAMES+=("$test_file")
-                FAILED_TEST_ERRORS+=("Test timeout after ${TIMEOUT}s")
-            else
-                log "${RED}[FAIL]${NC} $test_file (${TEST_DURATION}s)"
-                FAILED_TEST_NAMES+=("$test_file")
-                ERROR_MSG=$(cat "$TEST_ERROR" | head -5 | tr '\n' ' ')
-                if [ -z "$ERROR_MSG" ]; then
-                    ERROR_MSG="Non-zero exit code: $TEST_EXIT_CODE"
-                fi
-                FAILED_TEST_ERRORS+=("$ERROR_MSG")
-            fi
+            ;;
+        EXPECTED_ERROR)
+            log "${YELLOW}[EXPECTED_ERROR]${NC} $TEST_FILE (${DURATION}s)"
+            ERROR_TESTS_PASSED=$((ERROR_TESTS_PASSED + 1))
+            ERROR_TESTS_RUN=$((ERROR_TESTS_RUN + 1))
+            ;;
+        ERROR_TEST_FAILED)
+            log "${RED}[ERROR_TEST_FAILED]${NC} $TEST_FILE (${DURATION}s) - Should have failed but passed"
+            ERROR_TESTS_FAILED=$((ERROR_TESTS_FAILED + 1))
+            ERROR_TESTS_RUN=$((ERROR_TESTS_RUN + 1))
+            FAILED_TEST_NAMES+=("$TEST_FILE")
+            FAILED_TEST_ERRORS+=("$ERROR_MSG")
+            ;;
+        TIMEOUT)
+            log "${RED}[TIMEOUT]${NC} $TEST_FILE (>${TIMEOUT}s)"
             FAILED_TESTS=$((FAILED_TESTS + 1))
-        fi
-    fi
+            FAILED_TEST_NAMES+=("$TEST_FILE")
+            FAILED_TEST_ERRORS+=("$ERROR_MSG")
+            ;;
+        FAIL)
+            log "${RED}[FAIL]${NC} $TEST_FILE (${DURATION}s)"
+            FAILED_TESTS=$((FAILED_TESTS + 1))
+            FAILED_TEST_NAMES+=("$TEST_FILE")
+            FAILED_TEST_ERRORS+=("$ERROR_MSG")
+            ;;
+    esac
 
-    # Log test output if verbose
-    if [ "$VERBOSE" = true ]; then
+    # Log verbose output if requested
+    if [ "$VERBOSE" = true ] && [ -n "$OUTPUT_CONTENT" ]; then
         log_verbose "  Output:"
-        cat "$TEST_OUTPUT" | sed 's/^/    /' | tee -a "$LOG_FILE"
-        if [ -s "$TEST_ERROR" ]; then
+        echo "$OUTPUT_CONTENT" | sed 's/^/    /' | tee -a "$LOG_FILE"
+        if [ -n "$ERROR_CONTENT" ]; then
             log_verbose "  Errors:"
-            cat "$TEST_ERROR" | sed 's/^/    /' | tee -a "$LOG_FILE"
+            echo "$ERROR_CONTENT" | sed 's/^/    /' | tee -a "$LOG_FILE"
         fi
         log_verbose ""
     fi
 
     # Save to log file
     {
-        echo "=== Test: $test_file ==="
-        echo "Exit code: $TEST_EXIT_CODE"
-        echo "Duration: ${TEST_DURATION}s"
+        echo "=== Test: $TEST_FILE ==="
+        echo "Exit code: $EXIT_CODE"
+        echo "Duration: ${DURATION}s"
+        echo "Status: $STATUS"
         echo "--- Output ---"
-        cat "$TEST_OUTPUT"
+        echo "$OUTPUT_CONTENT"
         echo "--- Errors ---"
-        cat "$TEST_ERROR"
+        echo "$ERROR_CONTENT"
         echo ""
     } >> "$LOG_FILE"
-
-    # Cleanup temp files
-    rm -f "$TEST_OUTPUT" "$TEST_ERROR"
 done
 
 END_TIME=$(date +%s)

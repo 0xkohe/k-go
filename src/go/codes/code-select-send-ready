@@ -1,0 +1,15 @@
+package main
+
+func main() {
+  ch := make(chan int, 1);
+  select {
+  case ch <- 5: {
+    print(7);
+  };
+  default: {
+    print(99);
+  }
+  };
+  x := <-ch;
+  print(x);
+}
