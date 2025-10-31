@@ -1006,11 +1006,22 @@ module GO-CONCURRENT
        ...</thread>
        <channels>...
          chanId(Chan)
-           |-> chanState(SendQBlock:List, _RecvQ, Buf, _Size, _T, Closed)
+           |-> chanState(_SendQBlock:List, _RecvQ, Buf, _Size, _T, Closed)
        ...</channels>
     requires (size(Buf) >Int 0)
-      orBool (size(SendQBlock:List) >Int 0)
       orBool (Closed ==Bool true)
+
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> selectBlock(
+              ListItem(evalRecvCase(Chan, Body)) _Rest:List,
+              _Orig:List)
+          => chanRecv(Chan) ~> Body ... </k>
+       ...</thread>
+       <channels>...
+         chanId(Chan)
+           |-> chanState((ListItem(sendItem(_SendTid:Int, _SV)) _SendRest:List), _RecvQ, .List, _Size, _T, false)
+       ...</channels>
 
   rule <thread>...
          <tid> _Tid </tid>
@@ -1021,11 +1032,22 @@ module GO-CONCURRENT
        ...</thread>
        <channels>...
          chanId(Chan)
-           |-> chanState(SendQBlock:List, _RecvQ, Buf, _Size, _T, Closed)
+           |-> chanState(_SendQBlock:List, _RecvQ, Buf, _Size, _T, Closed)
        ...</channels>
     requires (size(Buf) >Int 0)
-      orBool (size(SendQBlock:List) >Int 0)
       orBool (Closed ==Bool true)
+
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> selectBlock(
+              ListItem(evalRecvAssignCase(Chan, X, Body)) _Rest:List,
+              _Orig:List)
+          => X = chanRecv(Chan) ~> Body ... </k>
+       ...</thread>
+       <channels>...
+         chanId(Chan)
+           |-> chanState((ListItem(sendItem(_SendTid:Int, _SV)) _SendRest:List), _RecvQ, .List, _Size, _T, false)
+       ...</channels>
 
   rule <thread>...
          <tid> _Tid </tid>
@@ -1036,11 +1058,22 @@ module GO-CONCURRENT
        ...</thread>
        <channels>...
          chanId(Chan)
-           |-> chanState(SendQBlock:List, _RecvQ, Buf, _Size, _T, Closed)
+           |-> chanState(_SendQBlock:List, _RecvQ, Buf, _Size, _T, Closed)
        ...</channels>
     requires (size(Buf) >Int 0)
-      orBool (size(SendQBlock:List) >Int 0)
       orBool (Closed ==Bool true)
+
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> selectBlock(
+              ListItem(evalRecvDeclCase(Chan, X, Body)) _Rest:List,
+              _Orig:List)
+          => X := chanRecv(Chan) ~> Body ... </k>
+       ...</thread>
+       <channels>...
+         chanId(Chan)
+           |-> chanState((ListItem(sendItem(_SendTid:Int, _SV)) _SendRest:List), _RecvQ, .List, _Size, _T, false)
+       ...</channels>
 
   rule <thread>...
          <tid> _Tid </tid>
@@ -1051,11 +1084,22 @@ module GO-CONCURRENT
        ...</thread>
        <channels>...
          chanId(Chan)
-           |-> chanState(SendQBlock:List, _RecvQ, Buf, _Size, _T, Closed)
+           |-> chanState(_SendQBlock:List, _RecvQ, Buf, _Size, _T, Closed)
        ...</channels>
     requires (size(Buf) >Int 0)
-      orBool (size(SendQBlock:List) >Int 0)
       orBool (Closed ==Bool true)
+
+  rule <thread>...
+         <tid> _Tid </tid>
+         <k> selectBlock(
+              ListItem(evalRecvOkCase(Chan, V, Ok, Body)) _Rest:List,
+              _Orig:List)
+          => (V, Ok) := recvWithOk(Chan) ~> Body ... </k>
+       ...</thread>
+       <channels>...
+         chanId(Chan)
+           |-> chanState((ListItem(sendItem(_SendTid:Int, _SV)) _SendRest:List), _RecvQ, .List, _Size, _T, false)
+       ...</channels>
 
   rule <k> executeSelectCase(evalSendCase(Chan, V, Body))
         => chanSend(Chan, V) ~> Body ... </k>
