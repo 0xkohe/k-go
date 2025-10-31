@@ -962,6 +962,10 @@ module GO-CONCURRENT
           Orig:List)
         => selectCheckReady(Rest, Ready, Body, Orig) ... </k>
 
+  // Selection from ready list
+  // Note: This implementation always selects the first ready case
+  // True non-deterministic selection would require additional mechanism
+  // (e.g., random number generation or explicit choice points)
   rule <k> selectChooseFrom(
           ListItem(Case:EvalCase) _Rest:List,
           _Default:K,
