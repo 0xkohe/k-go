@@ -1,0 +1,10 @@
+package main
+
+func main() {
+	ch := make(chan int, 1);
+	var sendCh chan<- int = ch;
+	var recvCh <-chan int = ch;
+
+	sendCh <- 42;
+	print(<-recvCh);
+}

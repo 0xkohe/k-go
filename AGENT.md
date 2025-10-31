@@ -93,24 +93,42 @@ The main Go language implementation is modular:
   - Function declarations with typed parameters
   - Function calls with call-by-value semantics
   - Return statements (single value or void)
+  - Function literals (closures) with environment capture
   - Lexical scoping for function parameters
 
-- **`main.k`**: Entry point that imports and combines `go.k` and `func.k`
+- **`concurrent.k`**: Concurrency semantics adding:
+  - Goroutines (go statement) with thread spawning
+  - Channels (make, send, receive, close)
+  - Buffered and unbuffered channels
+  - Channel directions (chan T, chan<- T, <-chan T)
+  - Direction validation with error checking
+  - Multi-value receive (v, ok := <-ch)
+  - For-range over channels
+  - Generic channel operations for int, bool, chan, func types
+
+- **`main.k`**: Entry point that imports and combines all modules
 
 ### Configuration Cells
 
 The K configuration uses multiple cells for state management:
 
-- `<k>`: Computation cell (program being executed)
+- `<threads>`: Collection of thread cells (for concurrency)
+- `<thread>`: Individual thread state (multiplicity="*")
+  - `<tid>`: Thread ID (unique integer)
+  - `<k>`: Computation cell (program being executed)
+  - `<tenv>`: Type environment mapping identifiers to types
+  - `<env>`: Environment mapping identifiers to locations (`Loc`)
+  - `<envStack>`, `<tenvStack>`: Stack cells for block scoping
+  - `<constEnv>`: Constant environment (compile-time constants)
+  - `<constEnvStack>`: Stack for constant block scoping
+  - `<scopeDecls>`: Stack of Maps tracking which identifiers were declared in each scope
+- `<nextTid>`: Counter for next thread ID
 - `<out>`: Output accumulator (for print statements)
-- `<tenv>`: Type environment mapping identifiers to types
-- `<env>`: Environment mapping identifiers to locations (`Loc`)
-- `<store>`: Shared store mapping `Loc` to actual values (ints, bools, closures)
+- `<store>`: Shared store mapping `Loc` to actual values (ints, bools, channels, closures)
 - `<nextLoc>`: Counter for the next free location
-- `<envStack>`, `<tenvStack>`: Stack cells for block scoping
-- `<scopeDecls>`: Stack of Maps tracking which identifiers were declared in each scope (for := redeclaration checking)
-- `<constEnv>`: Constant environment mapping identifiers to compile-time constant values
 - `<fenv>`: Function environment storing function definitions
+- `<channels>`: Map from channel ID to channel state
+- `<nextChanId>`: Counter for next channel ID
 
 ### Type System
 
@@ -151,9 +169,52 @@ The implementation distinguishes between compile-time constants and runtime vari
   - **RangeClause** (Go 1.22+): Integer range support (`for i := range n` iterates from 0 to n-1)
     - `for i := range n` - single iteration variable
     - `for range n` - no iteration variable (executes n times)
-    - Future: arrays, slices, maps, strings, channels
+    - For-range over channels: `for v := range ch`
 - **Break/Continue**: Implemented as signals that bubble up to nearest loop boundary
 - **Return**: Implemented as `returnSignal(value)` that bubbles to `returnJoin(type)` boundary
+
+### Concurrency Architecture
+
+The implementation supports Go's CSP-style concurrency with goroutines and channels:
+
+**Goroutines:**
+- Implemented as separate `<thread>` cells in the configuration
+- Each thread has its own `<tid>`, `<k>` computation, and environment cells
+- The `go` statement spawns a new thread with a copy of the current environment
+- Thread scheduling is non-deterministic (handled by K's rewrite engine)
+
+**Channels:**
+- Runtime values: `channel(id, elementType)` stored in `<store>`
+- Channel state: `chanState(sendQueue, recvQueue, buffer, bufferSize, elementType, closed)`
+  - `sendQueue`: List of `sendItem(tid, value)` for blocked senders
+  - `recvQueue`: List of `tid` or `recvOkItem(tid)` for blocked receivers
+  - `buffer`: List of buffered values (for buffered channels)
+  - `bufferSize`: Maximum buffer capacity (0 for unbuffered channels)
+  - `elementType`: Type of values the channel carries
+  - `closed`: Boolean indicating if channel is closed
+
+**Channel Operation Priority Rules:**
+Channel send and receive operations use carefully ordered priority rules to ensure correctness:
+1. **Priority 0**: Error conditions (panic on send to closed channel)
+2. **Priority 1**: Direct handoff (sender meets receiver, no buffering) - rendezvous
+3. **Priority 2**: Buffered operations (non-blocking when buffer has space/values)
+4. **Priority 3+**: Blocking operations (add to wait queue when no immediate progress)
+
+These priorities prevent stuck states and ensure Go's channel semantics.
+
+**Channel Directions:**
+- Type system distinguishes: `chan T` (bidirectional), `chan<- T` (send-only), `<-chan T` (receive-only)
+- Direction checking occurs at compile-time (semantic analysis via Priority 5 rules)
+- Bidirectional channels implicitly convert to directional channels (e.g., in function parameters)
+- Direction violations result in `ChanSendDirectionError` or `ChanRecvDirectionError`
+- Helper functions: `canSend(Type)`, `canReceive(Type)`, `elementType(Type)`
+
+**Generic Channel Operations:**
+- Refactored to work with any value type (int, bool, channel, function)
+- Single set of rules handles all channel types
+- Zero values computed via `zeroValueForType(Type)` function
+- ~45% code reduction compared to type-specific implementations
+- Easy to extend for new types (strings, structs, etc.)
 
 ### Example Programs
 
@@ -193,30 +254,51 @@ The compiled artifacts in `-kompiled/` directories are generated and should not 
 ## Current Go Language Support
 
 **Supported features:**
-- Basic types: int, bool
-- Variable declarations (var) with zero-value initialization
-- Constant declarations (const) with type inference and explicit types
+- **Basic types**: int, bool
+- **Variable declarations** (var) with zero-value initialization
+- **Constant declarations** (const) with type inference and explicit types
   - Compile-time constants stored in `constEnv`
   - Assignment to constants prohibited with error detection
   - Priority-based lookup (constants before variables)
-- Short declarations (:=) with same-scope redeclaration prevention
-- Arithmetic operators: +, -, *, /, %, unary -
-- Comparison operators: <, >, ==, !=, <=, >=
-- Boolean operators: &&, ||, !
-- Increment/decrement: ++, --
-- Control flow: if/else, for loops (ForClause and RangeClause)
+- **Short declarations** (:=) with same-scope redeclaration prevention
+- **Arithmetic operators**: +, -, *, /, %, unary -
+- **Comparison operators**: <, >, ==, !=, <=, >=
+- **Boolean operators**: &&, ||, !
+- **Increment/decrement**: ++, --
+- **Control flow**: if/else, for loops (ForClause and RangeClause)
   - Integer range (Go 1.22+): `for i := range n`, `for range n`
-- Functions: declarations, calls, multiple return values (tuples)
-- Block scoping with `scopeDecls` tracking for redeclaration checking
-- Break/continue statements
-- Print function (int only)
+  - For-range over channels: `for v := range ch`
+- **Functions**: declarations, calls, multiple return values (tuples)
+  - Function literals (closures) with lexical scope capture
+  - First-class functions (functions as values)
+  - Higher-order functions (functions taking/returning functions)
+- **Block scoping** with `scopeDecls` tracking for redeclaration checking
+- **Break/continue statements**
+- **Print function** (int and bool)
+- **Concurrency**:
+  - **Goroutines**: go statement spawns concurrent execution
+  - **Channels**:
+    - Unbuffered (`make(chan T)`) and buffered (`make(chan T, n)`)
+    - **Channel directions**: `chan T`, `chan<- T`, `<-chan T`
+    - Send (`ch <- v`) and receive (`<-ch`) operations
+    - Multi-value receive (`v, ok := <-ch`) for closed channel detection
+    - `close(ch)` with panic on double-close or send-on-closed
+    - For-range iteration over channels
+    - Generic support: `chan int`, `chan bool`, `chan (chan T)`, `chan func`
+  - Priority-based rule system for send/receive operations
+  - FIFO ordering guarantees for buffered channels
+  - Direction validation with compile-time error checking
 
 **Not yet supported:**
 - Struct types, arrays, slices, maps
 - Pointers
-- String type
-- For-range over collections (arrays, slices, maps, strings, channels)
+- String type (partial - literals only, no operations)
+- For-range over collections (arrays, slices, maps, strings)
 - Switch statements
-- Goroutines and channels
+- **select statement** for multiplexing channels
+- sync package (WaitGroup, Mutex, etc.)
+- Context package
+- Defer statements
+- Panic/recover mechanism (basic panic implemented for channels only)
 - Package system beyond single main package
 - Methods and interfaces

@@ -1,0 +1,8 @@
+package main
+
+func main() {
+	ch := make(chan int, 1);
+	var sendCh chan<- int = ch;
+	_ = <-sendCh;
+	print(1);
+}

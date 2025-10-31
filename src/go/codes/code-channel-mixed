@@ -1,0 +1,12 @@
+package main
+
+func main() {
+	intCh := make(chan int, 1);
+	boolCh := make(chan bool, 1);
+
+	intCh <- 42;
+	boolCh <- true;
+
+	print(<-intCh);
+	print(<-boolCh);
+}

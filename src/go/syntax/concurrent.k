@@ -16,8 +16,24 @@ module GO-SYNTAX-CONCURRENT
   syntax Statement ::= GoStmt
 
   // Go specification: ChannelType = ( "chan" | "chan" "<-" | "<-" "chan" ) ElementType .
-  // For now, we support bidirectional channels only
-  syntax ChannelType ::= "chan" Type
+  //
+  // Three channel directions provide compile-time type safety:
+  // 1. chan T       - bidirectional (can send and receive)
+  // 2. chan<- T     - send-only (can only send, receive is compile error)
+  // 3. <-chan T     - receive-only (can only receive, send is compile error)
+  //
+  // Direction enforcement:
+  // - Checked at semantic analysis time via priority rules in concurrent.k
+  // - Bidirectional channels can be implicitly converted to directional types
+  // - Directional channels cannot be converted back to bidirectional
+  // - Direction information stored in <tenv>, not in runtime channel value
+  //
+  // Symbol annotations:
+  // - Enable pattern matching in semantics module (canSend/canReceive helpers)
+  // - Required for K's rule application system to distinguish directions
+  syntax ChannelType ::= "chan" Type                    [symbol(chanBidirectional)]
+                       | "chan" "<-" Type               [symbol(chanSendOnly)]
+                       | "<-" "chan" Type               [symbol(chanRecvOnly)]
 
   syntax Type ::= ChannelType
 

@@ -1,0 +1,8 @@
+package main
+
+func main() {
+	ch := make(chan int, 1);
+	var recvCh <-chan int = ch;
+	recvCh <- 42;
+	print(1);
+}
