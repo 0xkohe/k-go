@@ -256,10 +256,43 @@ module GO
   // a, b = f() where f() returns tuple(...)
   syntax KItem ::= assignFromTuple(IdentifierList, List)
   syntax KItem ::= evalForAssign(IdentifierList, K)
+  syntax KItem ::= evalAssignList(IdentifierList, ExpressionList, List)
 
-  // Multi-variable assignment (2+ identifiers)
+  // Multi-variable assignment from single expression (function call returning tuple)
   rule <k> IL:IdentifierList = (E:Exp , .ExpressionList) => evalForAssign(IL, E) ... </k>
     requires lenIdList(IL) >=Int 2
+
+  // Multi-variable assignment from multiple expressions (a, b = x+1, y+2)
+  rule <k> IL:IdentifierList = EL:ExpressionList => evalAssignList(IL, EL, .List) ... </k>
+    requires lenIdList(IL) >=Int 2
+     andBool lenExpList(EL) >=Int 2
+
+  // Evaluate each expression in ExpressionList for assignment
+  // Note: We list each value type explicitly because K requires concrete sorts in patterns
+  rule <k> evalAssignList(IL, (V:Int , Rest:ExpressionList), Acc:List)
+        => evalAssignList(IL, Rest, Acc ListItem(V)) ... </k>
+
+  rule <k> evalAssignList(IL, (V:Bool , Rest:ExpressionList), Acc:List)
+        => evalAssignList(IL, Rest, Acc ListItem(V)) ... </k>
+
+  rule <k> evalAssignList(IL, (FV:FuncVal , Rest:ExpressionList), Acc:List)
+        => evalAssignList(IL, Rest, Acc ListItem(FV)) ... </k>
+
+  rule <k> evalAssignList(IL, V:Int, Acc:List)
+        => assignFromTuple(IL, Acc ListItem(V)) ... </k>
+
+  rule <k> evalAssignList(IL, V:Bool, Acc:List)
+        => assignFromTuple(IL, Acc ListItem(V)) ... </k>
+
+  rule <k> evalAssignList(IL, FV:FuncVal, Acc:List)
+        => assignFromTuple(IL, Acc ListItem(FV)) ... </k>
+
+  rule <k> evalAssignList(IL, .ExpressionList, Acc:List)
+        => assignFromTuple(IL, Acc) ... </k>
+
+  // Context: evaluate expressions in evalAssignList
+  context evalAssignList(_, (HOLE:Exp , _:ExpressionList), _)
+  context evalAssignList(_, HOLE:Exp, _)
 
   context evalForAssign(_, HOLE:KItem)
 
@@ -290,8 +323,9 @@ module GO
   // Multiple short variable declaration (handles mix of new and existing identifiers)
   syntax KItem ::= evalForShortDecl(IdentifierList, K, Map)
   syntax KItem ::= shortDeclFromTuple(IdentifierList, List, Map)
+  syntax KItem ::= evalShortDeclList(IdentifierList, ExpressionList, List, Map)
 
-  // Multi-variable short declaration (2+ identifiers)
+  // Multi-variable short declaration from single expression (function call returning tuple)
   rule <k> IL:IdentifierList := (E:Exp , .ExpressionList) => evalForShortDecl(IL, E, ScopeMap) ... </k>
        <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
     requires lenIdList(IL) >=Int 2
@@ -301,6 +335,46 @@ module GO
        <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
     requires lenIdList(IL) >=Int 2
      andBool notBool hasNewIdList(IL, ScopeMap)
+
+  // Multi-variable short declaration from multiple expressions (a, b := x+1, y+2)
+  rule <k> IL:IdentifierList := EL:ExpressionList => evalShortDeclList(IL, EL, .List, ScopeMap) ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
+    requires lenIdList(IL) >=Int 2
+     andBool lenExpList(EL) >=Int 2
+     andBool hasNewIdList(IL, ScopeMap)
+
+  rule <k> IL:IdentifierList := EL:ExpressionList => shortDeclError ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
+    requires lenIdList(IL) >=Int 2
+     andBool lenExpList(EL) >=Int 2
+     andBool notBool hasNewIdList(IL, ScopeMap)
+
+  // Evaluate each expression in ExpressionList and accumulate
+  // Note: We list each value type explicitly because K requires concrete sorts in patterns
+  rule <k> evalShortDeclList(IL, (V:Int , Rest:ExpressionList), Acc:List, ScopeMap)
+        => evalShortDeclList(IL, Rest, Acc ListItem(V), ScopeMap) ... </k>
+
+  rule <k> evalShortDeclList(IL, (V:Bool , Rest:ExpressionList), Acc:List, ScopeMap)
+        => evalShortDeclList(IL, Rest, Acc ListItem(V), ScopeMap) ... </k>
+
+  rule <k> evalShortDeclList(IL, (FV:FuncVal , Rest:ExpressionList), Acc:List, ScopeMap)
+        => evalShortDeclList(IL, Rest, Acc ListItem(FV), ScopeMap) ... </k>
+
+  rule <k> evalShortDeclList(IL, V:Int, Acc:List, ScopeMap)
+        => shortDeclFromTuple(IL, Acc ListItem(V), ScopeMap) ... </k>
+
+  rule <k> evalShortDeclList(IL, V:Bool, Acc:List, ScopeMap)
+        => shortDeclFromTuple(IL, Acc ListItem(V), ScopeMap) ... </k>
+
+  rule <k> evalShortDeclList(IL, FV:FuncVal, Acc:List, ScopeMap)
+        => shortDeclFromTuple(IL, Acc ListItem(FV), ScopeMap) ... </k>
+
+  rule <k> evalShortDeclList(IL, .ExpressionList, Acc:List, ScopeMap)
+        => shortDeclFromTuple(IL, Acc, ScopeMap) ... </k>
+
+  // Context: evaluate expressions in evalShortDeclList
+  context evalShortDeclList(_, (HOLE:Exp , _:ExpressionList), _, _)
+  context evalShortDeclList(_, HOLE:Exp, _, _)
 
   context evalForShortDecl(_, HOLE:KItem, _)
 
