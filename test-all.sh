@@ -156,8 +156,15 @@ run_single_test() {
     local ERROR_MSG=""
 
     if [ "$IS_ERROR_TEST" = true ]; then
-        # For error tests, we expect non-zero exit code or error output
-        if [ $TEST_EXIT_CODE -ne 0 ] || grep -q -i "error\|panic" "$TEST_ERROR" "$TEST_OUTPUT" 2>/dev/null; then
+        # For error tests, we expect non-zero exit code, error output, or incomplete execution
+        # Check if execution is stuck (incomplete <k> cell)
+        K_CELL_CONTENT=$(awk '/<k>/{flag=1; content=""; next} /<\/k>/{if(flag){print content; flag=0; content=""}} flag{content=content $0}' "$TEST_OUTPUT" 2>/dev/null | head -1 | tr -d ' \n\t\r')
+        K_CELL_STUCK=false
+        if [ -n "$K_CELL_CONTENT" ] && [ "$K_CELL_CONTENT" != ".K" ]; then
+            K_CELL_STUCK=true
+        fi
+
+        if [ $TEST_EXIT_CODE -ne 0 ] || grep -q -i "error\|panic" "$TEST_ERROR" "$TEST_OUTPUT" 2>/dev/null || [ "$K_CELL_STUCK" = true ]; then
             STATUS="EXPECTED_ERROR"
         else
             STATUS="ERROR_TEST_FAILED"

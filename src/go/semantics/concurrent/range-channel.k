@@ -61,9 +61,10 @@ module GO-RANGE-CHANNEL
        ...</channels>
 
   // If channel is closed and empty, exit loop
+  // Note: Don't generate exitScope here because enterScope already adds it
   rule <thread>...
          <tid> _Tid </tid>
-         <k> rangeChannelLoop(_X, channel(CId, TRange), _B) => exitScope ... </k>
+         <k> rangeChannelLoop(_X, channel(CId, TRange), _B) => .K ... </k>
        ...</thread>
        <channels>...
          CId |-> chanState(.List, _RecvQ, .List, _Size, TRange, true)
