@@ -113,24 +113,52 @@ module GO
   // Go specification: Constant declarations
   // Constants are compile-time values stored directly in constEnv
   // They don't consume runtime memory (no env/store allocation)
+  // BUGFIX: Now tracks in scopeDecls for redeclaration detection
 
-  // const x = value (type inference from value)
+  syntax KItem ::= "constRedeclError"
+
+  // Error rules for const redeclaration in same scope (priority 10)
+  rule <k> const X:Id = _I:Int => constRedeclError ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
+    requires X in_keys(ScopeMap)
+    [priority(10)]
+
+  rule <k> const X:Id = _B:Bool => constRedeclError ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
+    requires X in_keys(ScopeMap)
+    [priority(10)]
+
+  rule <k> const X:Id int = _I:Int => constRedeclError ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
+    requires X in_keys(ScopeMap)
+    [priority(10)]
+
+  rule <k> const X:Id bool = _B:Bool => constRedeclError ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
+    requires X in_keys(ScopeMap)
+    [priority(10)]
+
+  // const x = value (type inference from value) - now with scopeDecls tracking
   rule <k> const X:Id = I:Int => .K ... </k>
        <tenv> R => R [ X <- int ] </tenv>
        <constEnv> CE => CE [ X <- I ] </constEnv>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
 
   rule <k> const X:Id = B:Bool => .K ... </k>
        <tenv> R => R [ X <- bool ] </tenv>
        <constEnv> CE => CE [ X <- B ] </constEnv>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
 
-  // const x Type = value (explicit type)
+  // const x Type = value (explicit type) - now with scopeDecls tracking
   rule <k> const X:Id int = I:Int => .K ... </k>
        <tenv> R => R [ X <- int ] </tenv>
        <constEnv> CE => CE [ X <- I ] </constEnv>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
 
   rule <k> const X:Id bool = B:Bool => .K ... </k>
        <tenv> R => R [ X <- bool ] </tenv>
        <constEnv> CE => CE [ X <- B ] </constEnv>
+       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
 
   // Short variable declarations with store-based semantics
   rule <k> X:Id := I:Int => .K ... </k>
