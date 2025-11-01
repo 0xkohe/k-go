@@ -34,68 +34,28 @@ module GO-CHANNEL-OPS
 
   // Accept both ChanVal (actual channel) and FuncVal (nil)
   // Bidirectional channel
-  rule <k> var X:Id chan T:Type = CV:ChanVal => .K ... </k>
-       <tenv> R => R [ X <- chan T ] </tenv>
-       <env> Env => Env [ X <- L ] </env>
-       <store> Store => Store [ L <- CV ] </store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+  rule <k> var X:Id chan T:Type = CV:ChanVal => allocateVar(X, goValue(chan T, CV)) ... </k>
 
-  rule <k> var X:Id chan T:Type = FV:FuncVal => .K ... </k>
-       <tenv> R => R [ X <- chan T ] </tenv>
-       <env> Env => Env [ X <- L ] </env>
-       <store> Store => Store [ L <- FV ] </store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+  rule <k> var X:Id chan T:Type = FV:FuncVal => allocateVar(X, goValue(chan T, FV)) ... </k>
 
   // Send-only channel
-  rule <k> var X:Id chan <- T:Type = CV:ChanVal => .K ... </k>
-       <tenv> R => R [ X <- chan <- T ] </tenv>
-       <env> Env => Env [ X <- L ] </env>
-       <store> Store => Store [ L <- CV ] </store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+  rule <k> var X:Id chan <- T:Type = CV:ChanVal => allocateVar(X, goValue(chan <- T, CV)) ... </k>
 
-  rule <k> var X:Id chan <- T:Type = FV:FuncVal => .K ... </k>
-       <tenv> R => R [ X <- chan <- T ] </tenv>
-       <env> Env => Env [ X <- L ] </env>
-       <store> Store => Store [ L <- FV ] </store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+  rule <k> var X:Id chan <- T:Type = FV:FuncVal => allocateVar(X, goValue(chan <- T, FV)) ... </k>
 
   // Receive-only channel
-  rule <k> var X:Id <- chan T:Type = CV:ChanVal => .K ... </k>
-       <tenv> R => R [ X <- <- chan T ] </tenv>
-       <env> Env => Env [ X <- L ] </env>
-       <store> Store => Store [ L <- CV ] </store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+  rule <k> var X:Id <- chan T:Type = CV:ChanVal => allocateVar(X, goValue(<- chan T, CV)) ... </k>
 
-  rule <k> var X:Id <- chan T:Type = FV:FuncVal => .K ... </k>
-       <tenv> R => R [ X <- <- chan T ] </tenv>
-       <env> Env => Env [ X <- L ] </env>
-       <store> Store => Store [ L <- FV ] </store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+  rule <k> var X:Id <- chan T:Type = FV:FuncVal => allocateVar(X, goValue(<- chan T, FV)) ... </k>
 
   // ============================================================================
   // CHANNEL SHORT DECLARATIONS
   // ============================================================================
 
   // Go specification: Short variable declaration for channels
-  // Error rule: check for redeclaration first (higher priority)
-  rule <k> X:Id := _CV:ChanVal => shortDeclError ... </k>
-       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
-    requires X in_keys(ScopeMap)
-    [priority(10)]
-
   // Infer type from channel value
-  rule <k> X:Id := channel(CId:Int, T:Type) => .K ... </k>
-       <tenv> R => R [ X <- chan T ] </tenv>
-       <env> Env => Env [ X <- L ] </env>
-       <store> Store => Store [ L <- channel(CId, T) ] </store>
-       <nextLoc> L:Int => L +Int 1 </nextLoc>
-       <scopeDecls> (SD ListItem(ScopeMap)) => SD ListItem(ScopeMap [ X <- true ]) </scopeDecls>
+  rule <k> X:Id := channel(CId:Int, T:Type) => allocateVar(X, goValue(chan T, channel(CId, T))) ... </k>
+       <scopeDecls> (_SD ListItem(ScopeMap)) </scopeDecls>
     requires notBool (X in_keys(ScopeMap))
 
   // ============================================================================
@@ -103,12 +63,8 @@ module GO-CHANNEL-OPS
   // ============================================================================
 
   // Go specification: Channel assignment
-  rule <k> X:Id = CV:ChanVal => .K ... </k>
-       <tenv> ... X |-> chan _T:Type ... </tenv>
-       <env> ... X |-> L:Int ... </env>
-       <store> Store => Store [ L <- CV ] </store>
-       <constEnv> CE </constEnv>
-    requires notBool (X in_keys(CE))
+  rule <k> X:Id = CV:ChanVal => updateVar(X, asGoValue(CT, CV)) ... </k>
+       <tenv> ... X |-> CT:ChannelType ... </tenv>
 
   // ============================================================================
   // CHANNEL CREATION
