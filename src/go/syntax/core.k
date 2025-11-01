@@ -84,7 +84,11 @@ module GO-SYNTAX
 
   syntax Print ::= "print" "(" Exp ")" [strict]
 
-  syntax Exp ::= Int | Bool | Id | "(" Exp ")" [bracket]
+  // Forward declaration for Call (defined in func.k)
+  // This allows Call to be included in the highest priority level of Exp
+  syntax Call
+
+  syntax Exp ::= Int | Bool | Id | Call | "(" Exp ")" [bracket]
                > "!" Exp [seqstrict]
                | "-" Exp [seqstrict]
                > left:

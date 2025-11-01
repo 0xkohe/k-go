@@ -1,0 +1,26 @@
+package main
+
+func main() {
+  var a int = 1;
+  var b int = 2;
+  var c int = 3;
+  var d int = 5;
+
+  if a == 1 && b == 2 {
+    print(1);
+  };
+
+  if a == 1 && b == 2 && c < d {
+    print(2);
+  };
+
+  if a == 1 && b == 2 && c < d && d > 2 {
+    print(3);
+  };
+
+  if a < b && b < c && c < d {
+    print(4);
+  };
+
+  print(99);
+}

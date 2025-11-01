@@ -90,6 +90,19 @@ module GO-FUNC
   rule <k> funcVal(PIs, PTs, RT, B, ClosTEnv, ClosEnv, Meta) (AL:ArgList)
         => evaluateArgs(funcValCall(PIs, PTs, RT, B, ClosTEnv, ClosEnv, Meta), AL, .ArgList) ... </k>
 
+  // Go specification: IIFE (Immediately Invoked Function Expression)
+  // Evaluate FunctionLit to FuncVal first, then apply call
+  rule <k> (func Sig:FunctionSignature Body:Block) (AL:ArgList)
+        => funcVal(paramIdsOf(parametersOf(Sig)),
+                   paramTypesOf(parametersOf(Sig)),
+                   retTypeOf(Sig),
+                   Body,
+                   TEnv,
+                   Env,
+                   .Map) (AL) ... </k>
+       <tenv> TEnv </tenv>
+       <env> Env </env>
+
   // Restore closure environment (replace current environment)
   // The key change: we restore env (Id -> Loc) which SHARES the store!
   // This enables reference-based closure semantics

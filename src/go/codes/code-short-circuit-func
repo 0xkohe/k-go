@@ -1,0 +1,33 @@
+package main
+
+func main() {
+  if check1() && check2() && check3() {
+    print(1);
+  };
+
+  if checkFalse() && check1() && check2() {
+    print(2);
+  };
+
+  print(99);
+}
+
+func check1() bool {
+  print(10);
+  return true;
+};
+
+func check2() bool {
+  print(20);
+  return true;
+};
+
+func check3() bool {
+  print(30);
+  return true;
+};
+
+func checkFalse() bool {
+  print(40);
+  return false;
+}

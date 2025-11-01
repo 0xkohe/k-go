@@ -40,8 +40,11 @@ module GO-SYNTAX-FUNC
 
   // Function calls (not explicitly in spec grammar, but part of PrimaryExpr → Call)
   // Go specification: PrimaryExpr Arguments
+  // Note: Function value calls restricted to FuncVal to avoid parsing ambiguity with && operator
+  // For complex expressions, use parentheses: (expr)(args)
   syntax Call      ::= Id "(" ArgList ")" [prefer]  // Named function call
-                     | Exp "(" ArgList ")" [strict(1), avoid]  // Function value call (evaluate Exp first)
+                     | FuncVal "(" ArgList ")"  // Function value call
+                     | FunctionLit "(" ArgList ")"  // IIFE (Immediately Invoked Function Expression)
   syntax ArgList   ::= List{Exp, ","}
 
   // Go specification: ReturnStmt = "return" [ ExpressionList ] .
@@ -69,8 +72,8 @@ module GO-SYNTAX-FUNC
   // Go specification: TopLevelDecl = Declaration | FunctionDecl | MethodDecl .
   syntax TopDecl ::= FunctionDecl
 
-  // Go specification: Expression includes Call as part of PrimaryExpr
-  syntax Exp     ::= Call
+  // Note: Call is already included in Exp at highest priority (declared in core.k)
+  // syntax Exp ::= Call  // Removed - now defined in core.k with proper priority
 
   syntax ParamIds    ::= List{Id, ","}
   syntax ParamTypes  ::= List{Type, ","}
