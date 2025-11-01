@@ -164,9 +164,36 @@ run_single_test() {
             ERROR_MSG="Expected error but test passed"
         fi
     else
-        # For normal tests, we expect zero exit code
+        # For normal tests, we expect zero exit code AND complete execution
         if [ $TEST_EXIT_CODE -eq 0 ]; then
-            STATUS="PASS"
+            # Check if all <k> cells contain only .K (complete execution)
+            # Use awk to extract content between <k> and </k> tags
+            K_CELLS_OK=true
+            K_CELL_CONTENT=""
+
+            # Extract all <k> cell contents, one per line
+            while IFS= read -r cell_content; do
+                # Remove all whitespace and check if it's empty or just .K
+                clean_content=$(echo "$cell_content" | tr -d ' \n\t\r')
+                if [ -n "$clean_content" ] && [ "$clean_content" != ".K" ]; then
+                    K_CELLS_OK=false
+                    K_CELL_CONTENT="$clean_content"
+                    break
+                fi
+            done < <(awk '/<k>/{flag=1; content=""; next} /<\/k>/{if(flag){print content; flag=0; content=""}} flag{content=content $0}' "$TEST_OUTPUT" 2>/dev/null)
+
+            if [ "$K_CELLS_OK" = true ]; then
+                STATUS="PASS"
+            else
+                # Truncate long output for error message
+                if [ ${#K_CELL_CONTENT} -gt 100 ]; then
+                    K_CELL_TRUNCATED="${K_CELL_CONTENT:0:100}..."
+                else
+                    K_CELL_TRUNCATED="$K_CELL_CONTENT"
+                fi
+                STATUS="FAIL"
+                ERROR_MSG="Execution incomplete: <k> cell contains '$K_CELL_TRUNCATED' (expected '.K')"
+            fi
         else
             if [ $TEST_EXIT_CODE -eq 124 ]; then
                 STATUS="TIMEOUT"
