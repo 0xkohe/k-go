@@ -1,0 +1,17 @@
+package main
+
+func main() {
+    // Test 1: Simple blank identifier with integer
+    _ = 42;
+    print(1);
+
+    // Test 2: Blank identifier with expression
+    _ = 2 + 3;
+    print(2);
+
+    // Test 3: Blank identifier with channel receive
+    ch := make(chan int, 1);
+    ch <- 99;
+    _ = <-ch;
+    print(3);
+}

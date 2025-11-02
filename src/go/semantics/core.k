@@ -12,6 +12,7 @@ module GO
   imports BOOL
   imports MAP
   imports ID
+  imports STRING
 
   configuration
     <T>
@@ -245,6 +246,32 @@ module GO
 
   rule <k> X:Id = FV:FuncVal => updateVar(X, goValue(FT, FV)) ... </k>
        <tenv> ... X |-> FT:FunctionType ... </tenv>
+
+  // ============================================================================
+  // BLANK IDENTIFIER ASSIGNMENT
+  // ============================================================================
+  // Go specification: "The blank identifier provides a way to ignore right-hand
+  // side values in an assignment: _ = x // evaluate x but ignore it"
+  //
+  // Any typed value may be assigned to the blank identifier. The value is
+  // evaluated for side effects but discarded (not stored anywhere).
+  //
+  // Implementation: Blank identifier '_' is parsed as a regular Id,
+  // but we check for the string "_" and discard the value.
+
+  // Discard any KResult value assigned to blank identifier '_'
+  // Check if X is the identifier "_" and discard the value
+  rule <k> X:Id = I:Int => .K ... </k>
+    requires Id2String(X) ==String "_"
+    [priority(5)]
+
+  rule <k> X:Id = B:Bool => .K ... </k>
+    requires Id2String(X) ==String "_"
+    [priority(5)]
+
+  rule <k> X:Id = FV:FuncVal => .K ... </k>
+    requires Id2String(X) ==String "_"
+    [priority(5)]
 
   // Simplification: single-element IdentifierList/ExpressionList to Id/Exp
   // K's List macro can represent single elements as lists, need to simplify
