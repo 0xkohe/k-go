@@ -138,4 +138,8 @@ module GO-CONCURRENT-COMMON
   rule hasDefault(.K) => false
   rule hasDefault(_) => true [owise]
 
+  // Integrate channel values with core value helpers
+  rule typeOfValue(channel(_CId, T)) => chan T
+  rule goValueFromResult(channel(CId, T)) => goValue(chan T, channel(CId, T))
+
 endmodule

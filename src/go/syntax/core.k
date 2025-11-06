@@ -51,6 +51,7 @@ module GO-SYNTAX
 
   // Go specification: Assignment = ExpressionList assign_op ExpressionList .
   // Single assignment (most common case)
+  // Note: In Go, _ is also an Id, but with special semantics (blank identifier)
   syntax Assignment ::= Id "=" Exp [strict(2), prefer]
   // Multiple assignment (must have at least 2 identifiers)
   // Note: no strict - handled manually to support single-element lists
