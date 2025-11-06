@@ -1,0 +1,32 @@
+package main
+
+func main() {
+  result := func() int {
+    return 42;
+  }();
+  print(result);
+
+  sum := func(a int, b int) int {
+    return a + b;
+  }(10, 20);
+  print(sum);
+
+  func() {
+    print(100);
+  }();
+
+  x := 5;
+  doubled := func(n int) int {
+    return n * 2;
+  }(x);
+  print(doubled);
+
+  nested := func() int {
+    return func() int {
+      return 99;
+    }();
+  }();
+  print(nested);
+
+  print(999);
+}
